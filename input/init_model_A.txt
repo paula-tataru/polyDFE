@@ -1,0 +1,13 @@
+# each parameter is preceded by a flag; 0: estimate; 1: fix
+
+# full DFE
+#ID   eps an    eps cont  lambda    theta bar   a       S bar    b        S max     r (at least #groups-1 of them)
+1     1 0.00    1 0.00    0 0.05    0 0.01      0 2     0 -40    0 0.5    0 1       1  1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+
+# deleterious DFE only can be specified by fixing S_max to 0
+#ID   eps an    eps cont  lambda    theta bar   a       S bar    b        S max     r (at least #groups-1 of them)
+2     0 0.00    1 0.00    0 0.05    0 0.01      0 2     0 -40    0 0.5    1 0       1  1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+
+# no mutation variability
+#ID   eps an    eps cont  lambda    theta bar   a       S bar    b        S max     r (at least #groups-1 of them)
+3     0 0.05    1 0.00    0 0.05    0 0.01      1 -1    0 -40    0 0.5    0 1       1  1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1

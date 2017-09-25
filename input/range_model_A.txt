@@ -1,0 +1,7 @@
+# k determines the range of the transformation
+# I need to allow a large range for a
+# because a large a means no variation in mutation rate
+#ID   k    eps an   eps cont   lambda     theta bar  a          S bar      b        S max     r 
+1   0.01   0 0.1    0 0.1      0 1        0 1        0 1000     -200 0     0 10     0 100    0 10
+2   0.01   0 0.1    0 0.1      0 1        0 1        0 1000   -100000 0    0 10     0 100    0 10
+

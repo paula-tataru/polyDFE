@@ -1,0 +1,10 @@
+# each parameter is preceded by a flag; 0: estimate; 1: fix
+# each paired value of S_i and p_i shares a flag - only p_i is estimated, 
+# while S_i is fixed to the provided value
+
+#ID   eps an    eps cont  lambda    theta bar   a      S1    p1    S2    p2     S3  p3   S4  p4                 r (at least #groups-1 of them)
+ 0    0 0.02    1 0.00    0 0.005   0 0.003     0 6    0 -50 0.5   0 -10 0.35   0 0 0.1  0 3 0.05               0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+#ID   eps an    eps cont  lambda    theta bar   a      S1    p1    S2    p2     S3  p3   S4  p4     S5   p5     r (at least #groups-1 of them)
+ 1    0 0.02    1 0.00    0 0.005   0 0.003     0 6    0 -50 0.5   0 -10 0.35   0 0 0.1  0 3 0.04   0 10 0.01   0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+#ID   eps an    eps cont  lambda    theta bar   a      S1    p1    S2    p2     S3  p3   S4  p4                 r (at least #groups-1 of them)
+ 2    1 0.00    1 0.00    0 0.005   0 0.003     0 6    0 -50 0.5   0 -10 0.35   0 0 0.1  0 3 0.05               0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 

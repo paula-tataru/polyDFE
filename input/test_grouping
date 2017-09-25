@@ -1,0 +1,24 @@
+# ID no-groups   i j ... k
+# groups are: [r_1] (automated group, as r_1 = 1), 
+# [r_2, r_i], [r_i+1, r_j], ..., [r_k+1, r_{n-1}]
+# where n is the number of sampled sequences
+5     4     2 3 6 11 
+
+# ID no-groups   i j ... k
+# groups are: [r_1] (automated group, as r_1 = 1), 
+# [r_2, r_i], [r_i+1, r_j], ..., [r_k+1, r_{n-1}]
+# where n is the number of sampled sequences
+6     11    4 6 9 10 12 13 14 16 17 18 20 
+
+# ID no-groups   i j ... k
+# groups are: [r_1] (automated group, as r_1 = 1), 
+# [r_2, r_i], [r_i+1, r_j], ..., [r_k+1, r_{n-1}]
+# where n is the number of sampled sequences
+6     11    4 6 9 10 12 13 14 16 17 18 20 
+
+# ID no-groups   i j ... k
+# groups are: [r_1] (automated group, as r_1 = 1), 
+# [r_2, r_i], [r_i+1, r_j], ..., [r_k+1, r_{n-1}]
+# where n is the number of sampled sequences
+6     11    4 6 9 10 12 13 14 16 17 18 20 
+
