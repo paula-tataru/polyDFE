@@ -473,26 +473,29 @@ int parse_init(ParamsModel *pm, double *temp, int check_range)
         status += check_lim(pm->eps_an_flag, 0, 1);
         if (pm->eps_an_flag == FALSE || pm->initial_values == TRUE)
         {
-            status += check_lim_update(&pm->eps_an, pm->eps_an_min, pm->eps_an_max,
-                                               pm->eps_an_flag);
+            status += check_lim_update(&pm->eps_an, &pm->eps_an_min, &pm->eps_an_max,
+                                               pm->eps_an_flag, "eps_an");
         }
         status += check_lim(pm->eps_cont_flag, 0, 1);
         if (pm->eps_cont_flag == FALSE || pm->initial_values == TRUE)
         {
-            status += check_lim_update(&pm->eps_cont, pm->eps_cont_min,
-                                       pm->eps_cont_max, pm->eps_cont_flag);
+            status += check_lim_update(&pm->eps_cont, &pm->eps_cont_min,
+                                       &pm->eps_cont_max,
+                                       pm->eps_cont_flag, "eps_cont");
         }
         status += check_lim(pm->lambda_flag, 0, 1);
         if (pm->lambda_flag == FALSE || pm->initial_values == TRUE)
         {
-            status += check_lim_update(&pm->lambda, pm->lambda_min,
-                                       pm->lambda_max, pm->lambda_flag);
+            status += check_lim_update(&pm->lambda, &pm->lambda_min,
+                                       &pm->lambda_max, pm->lambda_flag,
+                                       "lambda");
         }
         status += check_lim(pm->theta_bar_flag, 0, 1);
         if (pm->theta_bar_flag == FALSE || pm->initial_values == TRUE)
         {
-            status += check_lim_update(&pm->theta_bar, pm->theta_bar_min,
-                                       pm->theta_bar_max, pm->theta_bar_flag);
+            status += check_lim_update(&pm->theta_bar, &pm->theta_bar_min,
+                                       &pm->theta_bar_max, pm->theta_bar_flag,
+                                       "theta_bar");
         }
         status += check_lim(pm->a_flag, 0, 1);
         // allow for a to be -1 and outside range
@@ -500,8 +503,8 @@ int parse_init(ParamsModel *pm, double *temp, int check_range)
         {
             if (pm->a_flag == FALSE || pm->initial_values == TRUE)
             {
-                status += check_lim_update(&pm->a, pm->a_min, pm->a_max,
-                                           pm->a_flag);
+                status += check_lim_update(&pm->a, &pm->a_min, &pm->a_max,
+                                           pm->a_flag, "a");
             }
         }
 
@@ -514,8 +517,9 @@ int parse_init(ParamsModel *pm, double *temp, int check_range)
                 if (pm->sel_flag[i] == FALSE || pm->initial_values == TRUE)
                 {
                     status += check_lim_update(&pm->sel_params[i],
-                                               pm->sel_min[i], pm->sel_max[i],
-                                               pm->sel_flag[i]);
+                                               &pm->sel_min[i], &pm->sel_max[i],
+                                               pm->sel_flag[i],
+                                               "a selection parameter");
                 }
             }
         }
@@ -534,9 +538,10 @@ int parse_init(ParamsModel *pm, double *temp, int check_range)
                                 || pm->initial_values == TRUE)
                 {
                     status += check_lim_update(&pm->sel_params[2 * i + 1],
-                                               pm->sel_min[2 * i + 1],
-                                               pm->sel_max[2 * i + 1],
-                                               pm->sel_flag[2 * i + 1]);
+                                               &pm->sel_min[2 * i + 1],
+                                               &pm->sel_max[2 * i + 1],
+                                               pm->sel_flag[2 * i + 1],
+                                               "a selection parameter");
                 }
                 sum += pm->sel_params[2*i+1];
             }
@@ -548,8 +553,8 @@ int parse_init(ParamsModel *pm, double *temp, int check_range)
         {
             if (pm->r_flag == FALSE || pm->initial_values == TRUE)
             {
-                status += check_lim_update(&pm->r[j], pm->r_min, pm->r_max,
-                                           pm->r_flag);
+                status += check_lim_update(&pm->r[j], &pm->r_min, &pm->r_max,
+                                           pm->r_flag, "r");
             }
         }
     }

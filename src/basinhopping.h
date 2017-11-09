@@ -54,7 +54,7 @@ struct params_basin_hop_s
 typedef struct params_basin_hop_s ParamsBasinHop;
 
 int check_lim(double x, double m, double M);
-int check_lim_update(double *x, double m, double M, int flag);
+int check_lim_update(double *x, double *m, double *M, int flag, char *s);
 void initialize_params_basin_hop(ParamsBasinHop *pb);
 void set_default_max_iter(ParamsBasinHop *pb);
 void allocate_params_basin_hop(ParamsBasinHop *pb, ParamsModel* pm);

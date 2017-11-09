@@ -438,11 +438,8 @@ int optimize_using_derivatives(const gsl_multimin_fdfminimizer_type *type,
                                                                        x->size);
     gsl_multimin_fdfminimizer_set(state, &func, x, po.step_size, po.tol);
 
-    if (p->verbose > 0)
-    {
-        print_header_result(*p->pm, FALSE);
-        print_result(*p->pm, FALSE, 0, state, status, s);
-    }
+    print_header_result(*p->pm, FALSE);
+    print_result(*p->pm, FALSE, 0, state, status, s);
 
     // do not start if lk is nan
     if (is_nan(state->f) == TRUE)
@@ -573,38 +570,35 @@ int optimize_using_derivatives(const gsl_multimin_fdfminimizer_type *type,
         }
     }
 
-    if (p->verbose > 0)
+    print_result(*p->pm, FALSE, iter, state, status, s);
+    if (iter > po.max_iter)
     {
-        print_result(*p->pm, FALSE, iter, state, status, s);
-        if (iter > po.max_iter)
-        {
-            printf("-- Local optimization: reached maximum number of iterations "
-                   "allowed\n");
-        }
-        else if (status == SAME_STATE)
-        {
-            printf("-- Local optimization: stuck in the same solution\n");
-        }
-        else if (status == SAME_STATE_CIR)
-        {
-            printf("-- Local optimization: restarting lead to the same solution\n");
-        }
-        else if (status == FOUND_NAN)
-        {
-            printf("-- Likelihood or gradient is nan\n");
-        } else if (status == OUT_OF_TIME)
-        {
-            printf("-- Local optimization: reached maximum running time allowed\n");
-        }
-        else if (status == MAX_LK)
-        {
-            printf("-- Reached maximum number of likelihood evaluations allowed. "
-                   "Results are not reliable\n");
-        }
-        else if (status)
-        {
-            printf("-- Local optimization: %s\n", gsl_strerror(status));
-        }
+        printf("-- Local optimization: reached maximum number of iterations "
+               "allowed\n");
+    }
+    else if (status == SAME_STATE)
+    {
+        printf("-- Local optimization: stuck in the same solution\n");
+    }
+    else if (status == SAME_STATE_CIR)
+    {
+        printf("-- Local optimization: restarting lead to the same solution\n");
+    }
+    else if (status == FOUND_NAN)
+    {
+        printf("-- Likelihood or gradient is nan\n");
+    } else if (status == OUT_OF_TIME)
+    {
+        printf("-- Local optimization: reached maximum running time allowed\n");
+    }
+    else if (status == MAX_LK)
+    {
+        printf("-- Reached maximum number of likelihood evaluations allowed. "
+               "Results are not reliable\n");
+    }
+    else if (status)
+    {
+        printf("-- Local optimization: %s\n", gsl_strerror(status));
     }
 
     // store best optimum found

@@ -693,7 +693,7 @@ getAIC = function(estimate)
 	return(2 * length(estimate$estimated) - 2 * estimate$lk)
 }
 
-compareModels = function(est1, est2, nested = FALSE)
+compareModels = function(est1, est2 = NULL, nested = NULL)
 {
 	# compare the two sets of estimated parameters
 	# get the AIC and, if the models are nested,
@@ -705,20 +705,26 @@ compareModels = function(est1, est2, nested = FALSE)
 	{
 		est1 = parseOutput(est1)
 	}
-	if (is.character(est2))
+	if (!is.null(est2) & is.character(est2))
 	{
 		est2 = parseOutput(est2)
 	}
 	
-	if (length(est1) != length(est2))
+	if (!is.null(est2) & length(est1) != length(est2))
 	{
 		warning('Estimates do not contain the same number of runs: ',
 			 length(est1), ' vs ', length(est2), '\n')
 	}
 	
+	mm = length(est1)
+	if (!is.null(est2))
+	{
+		mm = max(mm, length(est2))
+	}
+	
 	aic = NULL
 	lrt = NULL
-	for (i in 1:max(length(est1), length(est2)))
+	for (i in 1:mm)
 	{
 		aic1 = NA
 		aic2 = NA
@@ -726,11 +732,23 @@ compareModels = function(est1, est2, nested = FALSE)
 		{
 			aic1 = getAIC(est1[[i]])
 		}
+		
+		if (is.null(est2))
+		{
+			aic = rbind(aic, c(length(est1[[i]]$estimated), 
+									 est1[[i]]$lk, aic1))
+			next
+		}
+		
 		if (i <= length(est2))
 		{
 			aic2 = getAIC(est2[[i]])
 		}
-		aic = rbind(aic, c(aic1, aic2))
+		
+		aic = rbind(aic, c(length(est1[[i]]$estimated), 
+								 est1[[i]]$lk, aic1, 
+								 length(est2[[i]]$estimated), 
+								 est2[[i]]$lk, aic2))
 		
 		if ((i > length(est1)) || i > length(est2))
 		{
@@ -751,12 +769,15 @@ compareModels = function(est1, est2, nested = FALSE)
 								setdiff(names(est2[[i]]$values), est2[[i]]$estimated))
 		nest = (nest && isTRUE(all.equal(est1[[i]]$values[fixed],
 													est2[[i]]$values[fixed])))
+		# if models have the same number of parameters, 
+		# they can't be nested
+		nest = (nest && 
+				  	length(est1[[i]]$estimated) != length(est2[[i]]$estimated))
 		
 		# calculate LRT
 		# skip estimates where the number of parameters is the same
 		# these cannot possibly be nested
-		if ((nest || nested)
-			 && (length(est1[[i]]$estimated) != length(est2[[i]]$estimated)))
+		if (isTRUE(nested) || (nest && is.null(nested)))
 		{
 			# the D statistic is positive
 			# if I don't care which is the bigger model,
@@ -775,9 +796,23 @@ compareModels = function(est1, est2, nested = FALSE)
 			lrt = rbind(lrt, c(NA, est1[[i]]$lk, est2[[i]]$lk, NA))
 		}
 	}
-	colnames(lrt) = c('df', 'lk model 1', 'lk model 2', 'p-value')
 	
-	return(list(AIC = aic, LRT = lrt))
+	if (!is.null(est2))
+	{
+		colnames(aic) = c('df model 1', 'log lk model 1', 'AIC model 1', 
+								'df model 2', 'log lk model 2', 'AIC model 2')
+
+		if (is.null(nested) || isTRUE(nested))
+		{
+			colnames(lrt) = c('df', 'log lk model 1', 
+									'log lk model 2', 'p-value')	
+			return(list(AIC = aic, LRT = lrt))
+		}
+		return(list(AIC = aic))
+	}
+	
+	colnames(aic) = c('df', 'log lk', 'AIC')
+	return(list(AIC = aic))
 }
 
 grouping = function(rValues, diff = 0)

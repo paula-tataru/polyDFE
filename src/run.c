@@ -73,12 +73,14 @@ int handle_status(int status, char *filename, int param)
             else
             {
                 // found wrong range
-                int wrong = status / WRONG_RANGE;
-                int line_no = status - WRONG_RANGE * wrong;
-                fprintf(stderr,
-                        "Line %d in file %s contains %d numbers that are "
-                        "either invalid or outside permitted limits.\n",
-                        line_no, filename, wrong);
+                // don't do anything
+                // as the ranges are updated automatically
+//                int wrong = status / WRONG_RANGE;
+//                int line_no = status - WRONG_RANGE * wrong;
+//                fprintf(stderr,
+//                        "Line %d in file %s contains %d numbers that are "
+//                        "either invalid or outside permitted limits.\n",
+//                        line_no, filename, wrong);
             }
             return (EXIT_FAILURE);
         }
@@ -113,7 +115,7 @@ int parse_options(int argc, char **argv, unsigned *model,
 
     // flags for each required options
     int no_req_flags = 4;
-    int req_flags[6] = { 0,   0,   -1,  1,   -1,   0 };
+    int req_flags[6] = { 0,   0,   -1,  -1,   -1,   0 };
     char req_opts[6] = { 'A', 'd', 'm', 'o', 'r', 'i' };
 
     while ((opt = getopt(argc, argv, "d:m:o:r:i:p:bs:g:tv:ejwhl:")) != -1)
@@ -204,6 +206,8 @@ int parse_options(int argc, char **argv, unsigned *model,
                             optarg);
                     req_flags[0] = 1;
                 }
+                req_flags[3] = 1;
+
                 break;
             }
             case 'r':
@@ -276,7 +280,14 @@ int parse_options(int argc, char **argv, unsigned *model,
                             "m_neut L_neut m_sel L_sel n\n\n");
                     req_flags[0] = 1;
                 }
-                req_flags[3] += 2;
+                if (req_flags[3] != -1)
+                {
+                    req_flags[3] += 2;
+                } else
+                {
+                    req_flags[3] = 2;
+                }
+
                 break;
             }
             case 'g':
@@ -340,15 +351,15 @@ int parse_options(int argc, char **argv, unsigned *model,
         }
     }
 
-    // if -m is given, I want -r
-    if (req_flags[2] != -1)
-    {
-        if (req_flags[4] == -1)
-        {
-            fprintf(stderr, "Option -m requires option -r\n\n");
-            req_flags[0] = 1;
-        }
-    }
+//    // if -m is given and no -s, I want -r
+//    if (req_flags[2] != -1 && req_flags[3] < 2)
+//    {
+//        if (req_flags[4] == -1)
+//        {
+//            fprintf(stderr, "Option -m requires option -r\n\n");
+//            req_flags[0] = 1;
+//        }
+//    }
 
     // verify and generate any errors reading the arguments
     for (i = 1; i < no_req_flags - 1; i++)
@@ -378,7 +389,7 @@ int parse_options(int argc, char **argv, unsigned *model,
             req_flags[0] = 1;
         }
     }
-    else
+    else if (req_flags[3] != -1)
     {
         fprintf(stderr, "Options -o and -s cannot be used together\n\n");
         req_flags[0] = 1;
@@ -460,22 +471,21 @@ int simulate(unsigned model, double *sim, char *data_file, char *init_file,
     int parsed = EXIT_SUCCESS;
     int status = EXIT_SUCCESS;
 
-    // TODO re-enable this at some point
-    /*char c;
-     fprintf(stderr, "Warning: simulating data, %s will be overwritten.\n",
-     data_file);
-     fprintf(stderr, "Do you want to continue with simulation? (Y/N): ");
-     c = getchar();
-     if (c != 'Y' && c != 'N')
-     {
-     printf("Unknown input %c. Terminating...\n\n", c);
-     return (EXIT_SUCCESS);
-     }
-     if (c != 'Y')
-     {
-     printf("You chose no. Terminating...\n\n");
-     return (EXIT_SUCCESS);
-     }*/
+    char c;
+    fprintf(stderr, "Warning: simulating data, %s will be overwritten.\n",
+            data_file);
+    fprintf(stderr, "Do you want to continue with simulation? (Y/N): ");
+    c = getchar();
+    if (c != 'Y' && c != 'N')
+    {
+        printf("Unknown input %c. Terminating...\n\n", c);
+        return (EXIT_SUCCESS);
+    }
+    if (c != 'Y')
+    {
+        printf("You chose no. Terminating...\n\n");
+        return (EXIT_SUCCESS);
+    }
 
     // initialize the parameters
     ParamsModel pm;
@@ -544,6 +554,30 @@ int optimize(unsigned model, unsigned method, char *data_file, char *group_file,
         free_params(&p);
         return (EXIT_FAILURE);
     }
+    printf("---- Performing inference on %s using model ", data_file);
+    switch (model)
+    {
+        case 1:
+        {
+            printf("A\n\n");
+            break;
+        }
+        case 2:
+        {
+            printf("B\n\n");
+            break;
+        }
+        case 3:
+        {
+            printf("C\n\n");
+            break;
+        }
+        case 4:
+        {
+            printf("D\n\n");
+            break;
+        }
+    }
 
     parsed = parse(6, group_file, group_id, p.pm);
     status += handle_status(parsed, group_file, group_id);
@@ -560,7 +594,7 @@ int optimize(unsigned model, unsigned method, char *data_file, char *group_file,
     parsed = parse(3, basinhop_file, basinhop_id, &pb);
     status += handle_status(parsed, basinhop_file, basinhop_id);
 
-    initialize_selection_params(p.pm);
+    initialize_selection_params(p.pm, range_file);
     if (init_id != -1)
     {
         // if I don't use initial_estimation, make sure initial_values is TRUE
@@ -604,33 +638,6 @@ int optimize(unsigned model, unsigned method, char *data_file, char *group_file,
         }
     }
 
-    if (p.verbose > 0)
-    {
-        printf("---- Performing inference on %s using model ", data_file);
-        switch (model)
-        {
-            case 1:
-            {
-                printf("A\n\n");
-                break;
-            }
-            case 2:
-            {
-                printf("B\n\n");
-                break;
-            }
-            case 3:
-            {
-                printf("C\n\n");
-                break;
-            }
-            case 4:
-            {
-                printf("D\n\n");
-                break;
-            }
-        }
-    }
     if (p.counts_neut[0].sfs[p.pm->n - 1] == -1)
     {
         printf("---- Data does not contain divergence counts. Using option -w.\n");

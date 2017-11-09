@@ -213,7 +213,7 @@ void initialize_params(Params *p)
     initialize_params_model(p->pm);
 }
 
-void initialize_selection_params(ParamsModel *pm)
+void initialize_selection_params(ParamsModel *pm, char *range)
 {
     // according to the model, set the right flags to TRUE
     unsigned i = 0;
@@ -222,6 +222,32 @@ void initialize_selection_params(ParamsModel *pm)
         for (i = 0; i < pm->no_sel; i++)
         {
             pm->sel_flag[i] = TRUE;
+        }
+
+        if (range == NULL)
+        {
+            // initialize ranges too
+            // S_d
+            pm->sel_min[0] = -100000;
+            pm->sel_max[0] = 0;
+            // b
+            pm->sel_min[1] = 0;
+            pm->sel_max[1] = 10;
+            if (pm->model == 1)
+            {
+                // S_max
+                pm->sel_min[2] = 0;
+                pm->sel_max[2] = 100;
+            }
+            else
+            {
+                // p_b
+                pm->sel_min[2] = 0;
+                pm->sel_max[2] = 0.5;
+                // S_b
+                pm->sel_min[3] = 0;
+                pm->sel_max[3] = 100;
+            }
         }
     } else
     {
@@ -238,22 +264,16 @@ void initialize_selection_params(ParamsModel *pm)
         // to be FALSE, as this parameter should be 1 - sum(rest)
         pm->sel_fixed = 1;
         pm->sel_flag[pm->sel_fixed] = 2;
-    }
-    // if running model 3, initialize range too
-    if (pm->model == 3)
-    {
-        // S_d
-        pm->sel_min[0] = -100000;
-        pm->sel_max[0] = 0;
-        // b
-        pm->sel_min[1] = 0;
-        pm->sel_max[1] = 10;
-        // p_b
-        pm->sel_min[2] = 0;
-        pm->sel_max[2] = 0.5;
-        // S_b
-        pm->sel_min[3] = 0;
-        pm->sel_max[3] = 100;
+
+        if (range == NULL)
+        {
+            // initialize ranges too
+            for (i = 0; i < pm->no_sel; i++)
+            {
+                pm->sel_min[i] = 0;
+                pm->sel_max[i] = 1;
+            }
+        }
     }
 }
 

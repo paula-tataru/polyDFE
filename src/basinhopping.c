@@ -47,41 +47,48 @@ int check_lim(double x, double m, double M)
     return (EXIT_SUCCESS);
 }
 
-int check_lim_update(double *x, double m, double M, int flag)
+int check_lim_update(double *x, double *m, double *M, int flag, char *s)
 {
-    // verify that m <= x <= M
-    if (*x < m || *x > M)
+    if (flag == FALSE)
     {
-        return (WRONG_RANGE);
+        return (EXIT_SUCCESS);
     }
-    // if x is right on the range border, update it to move it away from the border
-    if (*x == m && flag == TRUE)
-    {
-        *x = m + (M - m) * 0.000009;
-    }
-    if (*x == M && flag == TRUE)
-    {
-        *x = M - (M - m) * 0.000009;
-    }
-    return (EXIT_SUCCESS);
-}
 
-void update_lim(double x, double *m, double *M)
-{
-    // update limits so that x is within the limits
-    if (x < *m)
+    // verify that m <= x <= M
+    if (*x < *m || *x > *M)
     {
-        // make m smaller
-        // this is only checked for parameters that are always positive
-        // so make sure that m stays at least 0
-        *m = x - (*M - *m) * 0.1;
-        *m = *m >= 0 ? *m : 0;
+        // update limits so that x is within the limits
+        if (*x < *m)
+        {
+            // make m smaller
+            // this is only checked for parameters that are always positive
+            // so make sure that m stays at least 0
+            *m = *x - (*M - *m) * 0.1;
+            *m = *m >= 0 ? *m : 0;
+        }
+        if (*x > *M)
+        {
+            // make M larger
+            *M = *x + (*M - *m) * 0.1;
+        }
+
+        printf("---- The initial value of %s did not fit the given ranges. "
+               "The ranges have been adjusted automatically.\n", s);
+
+        return (EXIT_SUCCESS);
     }
-    if (x > *M)
+
+    // if x is right on the range border, update it to move it away from the border
+    if (*x == *m)
     {
-        // make M larger
-        *M = x + (*M - *m) * 0.1;
+        *x = *m + (*M - *m) * 0.000009;
     }
+    if (*x == *M)
+    {
+        *x = *M - (*M - *m) * 0.000009;
+    }
+
+    return (EXIT_SUCCESS);
 }
 
 void fit_gamma(double len, double *y, double *mean, double *shape)
@@ -182,16 +189,15 @@ int estimate_mut(Params *p, double *obs_r)
     {
         p->pm->theta_bar = mut_mean;
         // check estimation is within given ranges
-        status += check_lim_update(&p->pm->theta_bar, p->pm->theta_bar_min,
-                                   p->pm->theta_bar_max, TRUE);
-        update_lim(p->pm->theta_bar, &p->pm->theta_bar_min, &p->pm->theta_bar_max);
+        status += check_lim_update(&p->pm->theta_bar, &p->pm->theta_bar_min,
+                                   &p->pm->theta_bar_max, TRUE, "theta_bar");
     }
     if (p->pm->a_flag == TRUE)
     {
         p->pm->a = mut_shape;
         // check estimation is within given ranges
-        status += check_lim_update(&p->pm->a, p->pm->a_min, p->pm->a_max, TRUE);
-        update_lim(p->pm->a, &p->pm->a_min, &p->pm->a_max);
+        status += check_lim_update(&p->pm->a, &p->pm->a_min, &p->pm->a_max,
+                                   TRUE, "a");
     }
 
     // for some reason, (*obs_r) can be negative sometimes
@@ -290,9 +296,8 @@ int estimate_neut(Params *p)
         // check estimation is within given ranges
         for (i = 1; i < p->pm->no_groups; i++)
         {
-            status += check_lim_update(&p->pm->r[i], p->pm->r_min,
-                                       p->pm->r_max, TRUE);
-            update_lim(p->pm->r[i], &p->pm->r_min, &p->pm->r_max);
+            status += check_lim_update(&p->pm->r[i], &p->pm->r_min,
+                                       &p->pm->r_max, TRUE, "r");
         }
     }
 
@@ -317,9 +322,8 @@ int estimate_neut(Params *p)
         }
 
         // check estimation is within given ranges
-        status += check_lim_update(&p->pm->lambda, p->pm->lambda_min,
-                                   p->pm->lambda_max, TRUE);
-        update_lim(p->pm->lambda, &p->pm->lambda_min, &p->pm->lambda_max);
+        status += check_lim_update(&p->pm->lambda, &p->pm->lambda_min,
+                                   &p->pm->lambda_max, TRUE, "lambda");
     }
 
     free(obs_diff);
@@ -705,7 +709,7 @@ int run_basin_hopping(ParamsBasinHop *pb,
 
     if (pb->size > 0)
     {
-        if (pb->max_iter > 0 && pb->size > 0 && p->verbose > 0)
+        if (pb->max_iter > 0 && pb->size > 0)
         {
             printf("---- Starting a maximum of %.0f basin hopping iterations\n\n",
                    pb->max_iter);
@@ -719,7 +723,7 @@ int run_basin_hopping(ParamsBasinHop *pb,
             {
                 status = estimate_grid(p);
             }
-            else if (p->verbose > 0)
+            else
             {
                 printf("---- Using provided initial values\n");
             }
@@ -747,10 +751,7 @@ int run_basin_hopping(ParamsBasinHop *pb,
                 // run the basin hopping iterations
                 for (iter = 0; iter <= max_iter; iter++)
                 {
-                    if (p->verbose > 0)
-                    {
-                        printf("-- Starting local optimization\n");
-                    }
+                    printf("-- Starting local optimization\n");
 
                     status = optimize_using_derivatives(type, po, p, s);
                     if (status != EXIT_SUCCESS)
@@ -776,10 +777,7 @@ int run_basin_hopping(ParamsBasinHop *pb,
                     }
                     else
                     {
-                        if (p->verbose == TRUE)
-                        {
-                            printf("\n");
-                        }
+                        printf("\n");
                     }
 
                     // test if I am stuck in the same solution
@@ -794,7 +792,7 @@ int run_basin_hopping(ParamsBasinHop *pb,
                         break;
                     }
 
-                    if (1 <= max_iter && iter < max_iter && p->verbose > 0)
+                    if (1 <= max_iter && iter < max_iter)
                     {
                         printf("---- Basin hopping iteration %d\n", iter + 1);
                     }
@@ -805,7 +803,7 @@ int run_basin_hopping(ParamsBasinHop *pb,
 
                 // test if reached max iterations
                 status = iter >= max_iter ? MAX_ITER : status;
-                if (max_iter > 0 && pb->size > 0 && p->verbose > 0)
+                if (max_iter > 0 && pb->size > 0)
                 {
                     printf("\n---- Basin hopping performed %d iterations\n",
                            iter - 1);

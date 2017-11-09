@@ -147,7 +147,7 @@ void print_expec(double *e, int n);
 
 void initialize_params_model(ParamsModel *pm);
 void initialize_params(Params *p);
-void initialize_selection_params(ParamsModel *pm);
+void initialize_selection_params(ParamsModel *pm, char *range);
 
 void set_to_zero(double **arr, int n);
 void allocate_selection_params(ParamsModel *pm);
