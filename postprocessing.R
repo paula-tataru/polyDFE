@@ -187,8 +187,8 @@ extractInfo = function(lines, init = FALSE)
 		values = c(values[1], "eps_cont" = 0, values[-1])
 	}
 	# add p_b and S_b if missing
-	# only for models A - C, which also contain paramter b
-	if (!"p_b" %in% names(values))
+	# only for models B - C, which also contain paramter b
+	if (!"p_b" %in% names(values) && (model == 'B' || model == 'C'))
 	{
 		pos = which(names(values) == "b")
 		if (length(pos) > 0)
@@ -427,6 +427,68 @@ getDensity = function(S, model, params)
 	return(dens)
 }
 
+toNames = function(ranges)
+{
+	names = paste('<', ranges[1])
+	for (i in 1:(length(ranges) - 1))
+	{
+		names = c(names, paste('(', ranges[i], ', ', ranges[i + 1], ')', sep=''))
+	}
+	names = c(names, paste(ranges[length(ranges)], '<'))
+	return(names)
+}
+
+getDiscretizedDFE = function(est, sRanges)
+{
+	model = est$model
+	params = est$values
+	# add -Inf and Inf to range so I can calculate integrals
+	sRanges = c(-Inf, sRanges, Inf)
+	# calculate integrals
+	dfe = rep(0, length(sRanges) - 1)
+	for (i in 1:(length(sRanges) - 1))
+	{
+		dfe[i] = integrate(getDensity,
+								 sRanges[i], sRanges[i + 1],
+								 model, params)$value
+	}
+	names(dfe) = toNames(sRanges[2:(length(sRanges) - 1)])
+	return(dfe)
+}
+
+getModelName = function(est)
+{
+	modelName = est$model
+	if (est$model == "A")
+	{
+		if (!"S_max" %in% est$estimated && est$values["S_max"] == 0)
+		{
+			modelName = paste(modelName, "del")
+		}
+	}
+	if (est$model == "B" || est$model == "C")
+	{
+		if (!"p_b" %in% est$estimated && est$values["p_b"] == 0)
+		{
+			modelName = paste(modelName, "del")
+		}
+	}
+	pos = grep("r ", names(est$values))
+	if (!"r" %in% est$estimated 
+		 	&& isTRUE(all.equal(est$values[pos], 
+		 							  rep(1, length(pos)), 
+		 							  check.attributes = FALSE)))
+	{
+		modelName = paste(modelName, "no r", sep = ", ")
+	}
+	if (!"eps_an" %in% est$estimated && est$values["eps_an"] == 0)
+	{
+		modelName = paste(modelName, "no eps", sep = ", ")
+	}
+	
+	return(modelName)
+}
+
 getDivergenceExpectation = function(S, model, params)
 {
 	# this is conditional on a given S
@@ -511,7 +573,7 @@ hasPosSel = function(values, model)
 	}
 }
 
-estimateAlpha = function(estimates, supLimit = 0, div = NULL, poly = F)
+estimateAlpha = function(estimates, supLimit = 0, div = NULL, poly = TRUE)
 {
 	model = estimates$model
 	values = estimates$values
@@ -582,11 +644,22 @@ estimateAlpha = function(estimates, supLimit = 0, div = NULL, poly = F)
 		# for models B and D, I do not have an integral
 		if (model != 'B' && model != 'D')
 		{
-			# always use the tail for integration
-			divBen = integrate(getDivergenceExpectation,
-									 lower = supLimit,
-									 upper = qexp(p = 0.999999, rate = 1 / values['S_b']),
-									 model = model, params = values )$value
+			tail = Inf
+			# use the tail for integration for model C
+		  if (model == 'C')
+		  {
+		    tail = qexp(p = 0.999999, rate = 1 / values['S_b'])
+		  }
+			if (tail < supLimit)
+			{
+			  divBen = 0
+			} else
+			{
+			  divBen = integrate(getDivergenceExpectation,
+			                     lower = supLimit,
+			                     upper = tail,
+			                     model = model, params = values )$value  
+			}
 		} else
 		{
 			if (model == 'B')
@@ -815,6 +888,18 @@ compareModels = function(est1, est2 = NULL, nested = NULL)
 	return(list(AIC = aic))
 }
 
+getAICweights = function(est)
+{
+	aic = compareModels(est)$AIC
+	# calculate Delta AIC
+	aic[, "AIC"] = aic[, "AIC"] - min(aic[, "AIC"])
+	# now calculate the weights
+	w = exp(-0.5 * aic[, "AIC"])
+	aic = cbind(aic, "weight" = w / sum(w))
+	colnames(aic)[3] = "delta AIC"
+	return(aic)
+}
+
 grouping = function(rValues, diff = 0)
 {
 	# calculate grouping of r values
@@ -985,5 +1070,71 @@ createInitLines = function(estimates, outputfile, startingID, fix,
 		
 		cat('\n', file = initFile, append = TRUE)
 		id = id + 1
+	}
+}
+
+bootstrapData = function(inputfile, outputfile = NULL, rep = 1)
+{
+	# this only works for data that has just two fragments
+	# one neutral and one selected
+	data = parseSFSData(inputfile)
+	n = which(colnames(data) == "length_sfs")
+	# extract and remove lengths
+	l = data[, n, drop = FALSE]
+	data = data[, -n]
+	if (ncol(data) >= n)
+	{
+		l = cbind(l, data[, ncol(data), drop = FALSE])
+		data = data[, -ncol(data)]
+	}
+	
+	# bootstrap the data
+	neut = sapply(data["neut", ], function(lam) rpois(max(rep, 2), lambda = lam))
+	sel = sapply(data["sel", ], function(lam) rpois(max(rep, 2), lambda = lam))
+	
+	# write it to file
+	if (is.null(outputfile))
+	{
+		outputfile = inputfile
+	}
+	dig = floor(log10(rep))
+	for (i in 1:rep)
+	{
+		filename = paste0(outputfile, "_", formatC(i, digits = dig, flag = "0"))
+		cat("# Bootstraped data from", inputfile, "\n", 
+			 file = filename, append = FALSE)
+		cat("1 1", n, "\n", file = filename, append = TRUE)
+		
+		# the neutral sfs
+		for (z in neut[i, 1:(n - 1)])
+		{
+			cat(sprintf("%6s", z), " ", file = filename, append = TRUE)
+		}
+		# the neutral length
+		cat(sprintf("%6s", l["neut", "length_sfs"]), 
+			 file = filename, append = TRUE)
+		# the neutral divergence count and length
+		if (ncol(l) == 2)
+		{
+			cat(sprintf("%6s", neut[i, "d"]), sprintf("%6s", l["neut", "length_d"]), 
+				 file = filename, append = TRUE)
+		}
+		cat("\n", file = filename, append = TRUE)
+		
+		# the selected sfs
+		for (z in sel[i, 1:(n - 1)])
+		{
+			cat(sprintf("%6s", z), " ", file = filename, append = TRUE)
+		}
+		# the selected length
+		cat(sprintf("%6s", l["sel", "length_sfs"]), 
+			 file = filename, append = TRUE)
+		# the selected divergence count and length
+		if (ncol(l) == 2)
+		{
+			cat(sprintf("%6s", sel[i, "d"]), sprintf("%6s", l["sel", "length_d"]), 
+				 file = filename, append = TRUE)
+		}
+		cat("\n", file = filename, append = TRUE)
 	}
 }

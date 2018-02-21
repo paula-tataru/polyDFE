@@ -13,12 +13,9 @@ molecular evolution.
 More details can be found in 
 [1] Tataru P., Mollion M., Glemin S., Bataillon T. (2016). Inference of 
 distribution of fitness effects and proportion of adaptive substitutions from 
-polymorphism data. Genetics, submitted.
-[2] Tataru P., Mollion M., Franco M.A.P., Bataillon T. (2016). polyDFE: 
-inference of distribution of fitness effects and proportion of adaptive 
-substitutions. Bioinformatics, in preparation.
+polymorphism data. Genetics, 207(3):1103-1119, 2017
 
-If using this software in a publication, please cite the above articles.
+If using this software in a publication, please cite the above article.
 
 
 Contact
