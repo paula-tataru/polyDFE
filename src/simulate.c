@@ -6,7 +6,7 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
- * Contact: paula@birc.au.dk 
+ * Contact: paula@birc.au.dk
  */
 
 #include <gsl/gsl_randist.h>
@@ -23,6 +23,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
+#include <errno.h>
+#include <string.h>
 
 #include "likelihood.h"
 
@@ -64,9 +66,12 @@ void sim_frag(FILE *f, ParamsModel pm, double len, double *expec, gsl_rng *rand)
 
 int sim_data(ParamsModel *pm, double *len, char *filename)
 {
+    printf("Printing from function, Writing to %s %p file\n", filename, filename);
     FILE *f = fopen(filename, "w");
     if (f == NULL)
     {
+        fprintf(stderr, "Simulation failed due to fopen: %s %s\n",
+                filename, strerror(errno));
         return (EXIT_FAILURE);
     }
 

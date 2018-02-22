@@ -6,7 +6,7 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
- * Contact: paula@birc.au.dk 
+ * Contact: paula@birc.au.dk
  */
 #include <getopt.h>
 #include <gsl/gsl_errno.h>
@@ -124,7 +124,7 @@ int parse_options(int argc, char **argv, unsigned *model,
         {
             case 'd':
             {
-                (*data_file) = optarg;
+                strcpy(*data_file, optarg);
                 req_flags[1] = 1;
                 break;
             }
@@ -471,10 +471,11 @@ int simulate(unsigned model, double *sim, char *data_file, char *init_file,
     int parsed = EXIT_SUCCESS;
     int status = EXIT_SUCCESS;
 
-    char c;
     fprintf(stderr, "Warning: simulating data, %s will be overwritten.\n",
             data_file);
-    fprintf(stderr, "Do you want to continue with simulation? (Y/N): ");
+    char c;
+    printf("Do you want to continue with simulation? (Y/N): ");
+    fflush(stdout);
     c = getchar();
     if (c != 'Y' && c != 'N')
     {
@@ -504,12 +505,12 @@ int simulate(unsigned model, double *sim, char *data_file, char *init_file,
         return (EXIT_FAILURE);
     }
 
+    printf("Printing from main, Writing to %s %p file\n", data_file, data_file);
     status = sim_data(pm, sim, data_file);
     free_params_model(&pm);
 
     if (status != EXIT_SUCCESS)
     {
-        fprintf(stderr, "Simulation failed, filed could not be opened.\n");
         return (EXIT_FAILURE);
     }
 
@@ -673,6 +674,7 @@ int main(int argc, char **argv)
     printf("\n");
 
     char *data_file = NULL;
+    data_file = malloc(sizeof(char) * 200);
     char *group_file = NULL;
     char *optim_file = NULL;
     char *range_file = NULL;
