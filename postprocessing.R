@@ -85,189 +85,210 @@ splitEqual = function(x)
 
 extractInfo = function(lines, init = FALSE)
 {
-	# remove empty lines
-	lines = removeEmpty(lines)
-	
-	values = NULL
-	
-	# find out which are the estimated parameters
-	# the info is in the line following -- Starting local optimization
-	pos = findPos('-- Starting local optimization', lines)[1] + 1
-	
-	if (is.na(pos))
-	{
-		# I didn't have any -- Starting local optimization
-		# nothing was estimated then!
-		# look for ---- Joint likelihood
-		pos = findPos('---- Joint likelihood', lines)
-		# extract the likelihood
-		lk = strsplit(lines[pos], split = ' ')[[1]]
-		lk = as.numeric(lk[length(lk)])
-		estimated = NA
-		grad = NA
-		# extract the model, it's in position 2
-		model = strsplit(lines[pos + 1], split = ': ')[[1]][2]
-	} else
-	{
-		# figure out what parameters have been estimated
-		estimated = splitBySpace(lines[pos])
-		# the first and last 4 contain
-		# iteration number, ln lk, gradient and status
-		estimated = estimated[2:(length(estimated) - 4)]
-		
-		# find out what is the best likelihood found
-		# what model I used
-		# and what are the parameters
-		# get the position of best likelihood
-		pos = findPos('---- Best joint likelihood', lines)
-		
-		# extract the likelihood and gradient
-		lk = strsplit(lines[pos], split = ' ')[[1]]
-		# remove empty entries
-		lk = lk[which(unlist(lapply(lk, nchar)) > 0, arr.ind = TRUE)]
-		grad = as.numeric(lk[length(lk)])
-		lk = as.numeric(lk[length(lk) - 3])
-		# extract the model, it's in position 2
-		model = strsplit(lines[pos + 1], split = ': ')[[1]][2]
-	}
-	
-	# extract the rest of the parameters; I have 6 lines left
-	for (i in seq(from = pos + 2, to = pos + 6, by = 2))
-	{
-		# get the parameters on this line
-		params = c(names(values), splitBySpace(lines[i]))
-		# get the values from the next line
-		values = c(values, as.numeric(splitBySpace(lines[i + 1])))
-		names(values) = params
-	}
-	
-	if (init)
-	{
-		# I actually want the parameters estimated from the init values
-		pos = findPos('---- Using provided initial values', lines)
-		if (length(pos) == 0)
-		{
-			# no init was used
-			break
-		}
-		# find the last line of the output
-		# it has to end with -- Found new optimum with likelihood
-		# as it is the first run
-		end = findPos('-- Found new optimum with likelihood', lines)[1]
-		# find the last line that had only numbers
-		for (i in end:pos)
-		{
-			aux = strsplit(lines[i], split = ' ')[[1]]
-			# get rid of empty entries
-			aux = removeEmpty(aux)
-			aux = tryCatch(as.numeric(aux),
-								warning = function(w) return(w))
-			if (typeof(aux) != "list")
-			{
-				# valid conversion, get results
-				# the first and last 3 contain
-				# iteration number, lnlk, gradient and status
-				values[estimated] = aux[2:(length(aux) - 3)]
-				break
-			}
-		}
-		# update likelihood and gradient
-		aux = strsplit(lines[end], split = ' ')[[1]]
-		lk = as.numeric(aux[7])
-		grad = as.numeric(aux[10])
-	}
-	
-	# add eps_an and eps_cont if missing
-	if (!"eps_an" %in% names(values))
-	{
-		values = c("eps_an" = 0, values)
-	}
-	if (!"eps_cont" %in% names(values))
-	{
-		values = c(values[1], "eps_cont" = 0, values[-1])
-	}
-	# add p_b and S_b if missing
-	# only for models B - C, which also contain paramter b
-	if (!"p_b" %in% names(values) && (model == 'B' || model == 'C'))
-	{
-		pos = which(names(values) == "b")
-		if (length(pos) > 0)
-		{
-			values = c(values[1:pos],
-						  "p_b" = 0, "S_b" = 0,
-						  values[(pos + 1):length(values)])	
-		}
-	}
-	# add a if missing
-	if (!"a" %in% names(values))
-	{
-		pos = which(names(values) == "theta_bar")
-		values = c(values[1:pos],
-					  "a" = -1,
-					  values[(pos + 1):length(values)])
-	}
-	# add lambda if missing
-	if (!"lambda" %in% names(values))
-	{
-		pos = which(names(values) == "eps_cont")
-		values = c(values[1:pos],
-					  "lambda" = 0,
-					  values[(pos + 1):length(values)])
-	}
-	
-	# extract expectations
-	# expectations are in the order
-	# P_neut, P_sel, D_neut, D_sel, mis_neut, mis_sel
-	pos = findPos('---- Expected', lines)
-	if (length(pos) == 0)
-	{
-		# no expectations
-		return(list(model = model, lk = lk, grad = grad,
-						values = values, estimated = estimated
-		))
-	}
-	# first, figure out n
-	n = pos[2] - pos[1]
-	# also, figure out where expectations end
-	pos = c(pos[1], pos[2], pos[2] + n)
-	expec = NULL
-	for (i in 1:2)
-	{
-		expec = rbind(expec,
-						  unlist(lapply(lines[(pos[i] + 1):(pos[i + 1] - 1)],
-						  				    function(x) as.numeric(splitEqual(x)[2]))))
-	}
-	expec = cbind(expec, c(NA, NA), c(NA, NA))
-	colnames(expec) = c(paste0("E[P_z(", 1:(n - 1), ")]"), "E[D_z]", "E[mis_z]")
-	rownames(expec) = c("neut", "sel")
-	# add E[D_neut] and E[D_sel]
-	pos = findPos('E[D_neut] = ', lines)
-	if (length(pos) == 1)
-	{
-		expec[1, n] = as.numeric(splitEqual(lines[pos])[2])
-		expec[2, n] = as.numeric(splitEqual(lines[pos + 1])[2])
-	}
-	# add E[mis_neut] and E[mis_sel]
-	pos = findPos('E[mis_neut] = ', lines)
-	if (length(pos) == 1)
-	{
-		expec[1, n + 1] = as.numeric(splitEqual(lines[pos])[2])
-		expec[2, n + 1] = as.numeric(splitEqual(lines[pos + 1])[2])
-	}
-	
-	# extract alpha
-	pos = findPos('---- alpha', lines)
-	alpha = NULL
-	for (p in pos)
-	{
-		aux = splitEqual(lines[p])
-		alpha = c(alpha, as.numeric(aux[2]))
-		names(alpha)[length(alpha)] = strsplit(aux[1], split = "---- ")[[1]][2]
-	}
-	
-	return(list(model = model, lk = lk, grad = grad,
-					values = values, estimated = estimated,
-					n = n, expec = expec, alpha = alpha))
+    # remove empty lines
+    lines = removeEmpty(lines)
+    
+    values = NULL
+    
+    # find out which are the estimated parameters
+    # the info is in the line following -- Starting local optimization
+    pos = findPos('-- Starting local optimization', lines)[1] + 1
+    
+    if (is.na(pos))
+    {
+        # I didn't have any -- Starting local optimization
+        # nothing was estimated then!
+        # look for ---- Joint likelihood
+        pos = findPos('---- Joint likelihood', lines)
+        # extract the likelihood
+        lk = strsplit(lines[pos], split = ' ')[[1]]
+        lk = as.numeric(lk[length(lk)])
+        estimated = NA
+        grad = NA
+        # extract the model, it's in position 2
+        model = strsplit(lines[pos + 1], split = ': ')[[1]][2]
+    } else
+    {
+        # figure out what parameters have been estimated
+        estimated = splitBySpace(lines[pos])
+        # the first and last 4 contain
+        # iteration number, ln lk, gradient and status
+        estimated = estimated[2:(length(estimated) - 4)]
+        
+        # find out what is the best likelihood found
+        # what model I used
+        # and what are the parameters
+        # get the position of best likelihood
+        pos = findPos('---- Best joint likelihood', lines)
+        
+        # extract the likelihood and gradient
+        lk = strsplit(lines[pos], split = ' ')[[1]]
+        # remove empty entries
+        lk = lk[which(unlist(lapply(lk, nchar)) > 0, arr.ind = TRUE)]
+        grad = as.numeric(lk[length(lk)])
+        lk = as.numeric(lk[length(lk) - 3])
+        # extract the model, it's in position 2
+        model = strsplit(lines[pos + 1], split = ': ')[[1]][2]
+    }
+    
+    # extract the rest of the parameters; I have 6 lines left
+    for (i in seq(from = pos + 2, to = pos + 6, by = 2))
+    {
+        # get the parameters on this line
+        params = c(names(values), splitBySpace(lines[i]))
+        # get the values from the next line
+        values = c(values, as.numeric(splitBySpace(lines[i + 1])))
+        names(values) = params
+    }
+    
+    if (init)
+    {
+        # I actually want the parameters estimated from the init values
+        pos = findPos('---- Using provided initial values', lines)
+        if (length(pos) == 0)
+        {
+            # no init was used
+            warning("polyDFE was not run with the provided initial values")
+            return(NULL)
+        }
+        # move on to starting the optimization
+        # using the initial values is always the first one
+        pos = findPos('-- Starting local optimization', lines)[1] + 1
+        if (!is.na(pos))
+        {
+            # find the last line of the output
+            # it has to end with a line that starts with --
+            end = findPos('--', lines)
+            end = end[which(end > pos)][1]
+            # find the last line that had only numbers
+            for (i in end:pos)
+            {
+                aux = strsplit(lines[i], split = ' ')[[1]]
+                # get rid of empty entries
+                aux = removeEmpty(aux)
+                aux = tryCatch(as.numeric(aux),
+                               warning = function(w) return(w))
+                if (typeof(aux) != "list")
+                {
+                    # valid conversion, get results
+                    # the first and last 3 contain
+                    # iteration number, lnlk, gradient and status
+                    values[estimated] = aux[2:(length(aux) - 3)]
+                    # update likelihood and gradient
+                    lk = as.numeric(aux[length(aux) - 2])
+                    grad = as.numeric(aux[length(aux) - 1])
+                    break
+                }
+            }
+        } 
+    }
+    
+    # add eps_an and eps_cont if missing
+    if (!"eps_an" %in% names(values))
+    {
+        values = c("eps_an" = 0, values)
+    }
+    if (!"eps_cont" %in% names(values))
+    {
+        values = c(values[1], "eps_cont" = 0, values[-1])
+    }
+    # add p_b and S_b if missing
+    # only for models B - C, which also contain paramter b
+    if (!"p_b" %in% names(values) && (model == 'B' || model == 'C'))
+    {
+        pos = which(names(values) == "b")
+        if (length(pos) > 0)
+        {
+            values = c(values[1:pos],
+                       "p_b" = 0,
+                       "S_b" = 0,
+                       values[(pos + 1):length(values)])
+        }
+    }
+    # add a if missing
+    if (!"a" %in% names(values))
+    {
+        pos = which(names(values) == "theta_bar")
+        values = c(values[1:pos],
+                   "a" = -1,
+                   values[(pos + 1):length(values)])
+    }
+    # add lambda if missing
+    if (!"lambda" %in% names(values))
+    {
+        pos = which(names(values) == "eps_cont")
+        values = c(values[1:pos],
+                   "lambda" = 0,
+                   values[(pos + 1):length(values)])
+    }
+    
+    # extract expectations
+    # expectations are in the order
+    # P_neut, P_sel, D_neut, D_sel, mis_neut, mis_sel
+    pos = findPos('---- Expected', lines)
+    if (length(pos) == 0)
+    {
+        # no expectations
+        return(list(
+            model = model,
+            lk = lk,
+            grad = grad,
+            values = values,
+            estimated = estimated
+        ))
+    }
+    # first, figure out n
+    n = pos[2] - pos[1]
+    # also, figure out where expectations end
+    pos = c(pos[1], pos[2], pos[2] + n)
+    expec = NULL
+    for (i in 1:2)
+    {
+        expec = rbind(expec,
+                      unlist(lapply(lines[(pos[i] + 1):(pos[i + 1] - 1)],
+                                    function(x)
+                                        as.numeric(splitEqual(x)[2]))))
+    }
+    expec = cbind(expec, c(NA, NA), c(NA, NA))
+    colnames(expec) = c(paste0("E[P_z(", 1:(n - 1), ")]"), "E[D_z]", "E[mis_z]")
+    rownames(expec) = c("neut", "sel")
+    # add E[D_neut] and E[D_sel]
+    pos = findPos('E[D_neut] = ', lines)
+    if (length(pos) == 1)
+    {
+        expec[1, n] = as.numeric(splitEqual(lines[pos])[2])
+        expec[2, n] = as.numeric(splitEqual(lines[pos + 1])[2])
+    }
+    # add E[mis_neut] and E[mis_sel]
+    pos = findPos('E[mis_neut] = ', lines)
+    if (length(pos) == 1)
+    {
+        expec[1, n + 1] = as.numeric(splitEqual(lines[pos])[2])
+        expec[2, n + 1] = as.numeric(splitEqual(lines[pos + 1])[2])
+    }
+    
+    # extract alpha
+    pos = findPos('---- alpha', lines)
+    alpha = NULL
+    for (p in pos)
+    {
+        aux = splitEqual(lines[p])
+        alpha = c(alpha, as.numeric(aux[2]))
+        names(alpha)[length(alpha)] = strsplit(aux[1], split = "---- ")[[1]][2]
+    }
+    
+    return(
+        list(
+            model = model,
+            lk = lk,
+            grad = grad,
+            values = values,
+            estimated = estimated,
+            n = n,
+            expec = expec,
+            alpha = alpha
+        )
+    )
 }
 
 parseOutput = function(filename, init = FALSE)
@@ -438,11 +459,22 @@ toNames = function(ranges)
 	return(names)
 }
 
-getDiscretizedDFE = function(est, sRanges)
+getDiscretizedDFE = function(estimates, sRanges = c(-100, -10, -1, 0, 1, 10))
 {
-	model = est$model
-	params = est$values
+    # if the list doesn't contain model
+    # but it's entry does
+    # throw a warning 
+    if (!("model" %in% names(estimates)) && ("model" %in% names(estimates[[1]])))
+    {
+        warning("estimates should contain just one entry ",
+                "from the list returned by parseOutput")
+        return(NULL)
+    }
+	model = estimates$model
+	params = estimates$values
 	# add -Inf and Inf to range so I can calculate integrals
+	# make sure sRanges is sorted
+	sRanges = sort(sRanges)
 	sRanges = c(-Inf, sRanges, Inf)
 	# calculate integrals
 	dfe = rep(0, length(sRanges) - 1)
@@ -456,32 +488,32 @@ getDiscretizedDFE = function(est, sRanges)
 	return(dfe)
 }
 
-getModelName = function(est)
+getModelName = function(estimates)
 {
-	modelName = est$model
-	if (est$model == "A")
+	modelName = estimates$model
+	if (estimates$model == "A")
 	{
-		if (!"S_max" %in% est$estimated && est$values["S_max"] == 0)
+		if (!"S_max" %in% estimates$estimated && estimates$values["S_max"] == 0)
 		{
 			modelName = paste(modelName, "del")
 		}
 	}
-	if (est$model == "B" || est$model == "C")
+	if (estimates$model == "B" || estimates$model == "C")
 	{
-		if (!"p_b" %in% est$estimated && est$values["p_b"] == 0)
+		if (!"p_b" %in% estimates$estimated && estimates$values["p_b"] == 0)
 		{
 			modelName = paste(modelName, "del")
 		}
 	}
-	pos = grep("r ", names(est$values))
-	if (!"r" %in% est$estimated 
-		 	&& isTRUE(all.equal(est$values[pos], 
-		 							  rep(1, length(pos)), 
-		 							  check.attributes = FALSE)))
+	pos = grep("r ", names(estimates$values))
+	if (!"r" %in% estimates$estimated 
+		 	&& isTRUE(all.equal(estimates$values[pos], 
+		 	                    rep(1, length(pos)), 
+		 	                    check.attributes = FALSE)))
 	{
 		modelName = paste(modelName, "no r", sep = ", ")
 	}
-	if (!"eps_an" %in% est$estimated && est$values["eps_an"] == 0)
+	if (!"eps_an" %in% estimates$estimated && estimates$values["eps_an"] == 0)
 	{
 		modelName = paste(modelName, "no eps", sep = ", ")
 	}
@@ -638,7 +670,7 @@ estimateAlpha = function(estimates, supLimit = 0, div = NULL, poly = TRUE)
 		# if no positive selection, return o
 		if (!hasPosSel(values, model))
 		{
-			return(NA)
+			return(0)
 		}
 		
 		# for models B and D, I do not have an integral
@@ -676,7 +708,7 @@ estimateAlpha = function(estimates, supLimit = 0, div = NULL, poly = TRUE)
 					}	
 				} else
 				{
-					return(NA)
+					return(0)
 				}
 			}
 		}
@@ -888,9 +920,9 @@ compareModels = function(est1, est2 = NULL, nested = NULL)
 	return(list(AIC = aic))
 }
 
-getAICweights = function(est)
+getAICweights = function(estimates)
 {
-	aic = compareModels(est)$AIC
+	aic = compareModels(estimates)$AIC
 	# calculate Delta AIC
 	aic[, "AIC"] = aic[, "AIC"] - min(aic[, "AIC"])
 	# now calculate the weights
@@ -900,8 +932,14 @@ getAICweights = function(est)
 	return(aic)
 }
 
-grouping = function(rValues, diff = 0)
+grouping = function(rValues, diff = NA)
 {
+    if (is.na(diff))
+    {
+        # no grouping
+        return(list(groups = names(rValues), r = rValues))
+    }
+    
 	# calculate grouping of r values
 	# by merging values that have an absolute difference of at most diff
 	groups = NULL
@@ -967,8 +1005,9 @@ writeModelD = function(values, rPos, fixedInfo = NULL)
 	return(toWrite)
 }
 
-createInitLines = function(estimates, outputfile, startingID, fix,
-									groupingDiff = 0)
+createInitLines = function(estimates, outputfile, startingID = 1, 
+                           fix = c("eps_cont"),
+                           groupingDiff = NA)
 {
 	# create init lines with the estimated parameters from inputfile or estimates
 	# using ids starting at the given value
@@ -984,9 +1023,22 @@ createInitLines = function(estimates, outputfile, startingID, fix,
 	}
 	
 	id = startingID
-	# I assume all estimates in the file come from the same model
 	model = allEst[[1]]$model
+	# check all runs in allEst use the same model
+	for (est in allEst)
+	{
+	    if (est$model != model)
+	    {
+	        stop('Not all polyDFE runs use the same model!\n')
+	    }
+	}
 	allParams = names(allEst[[1]]$values)
+	
+	# update fix if it says "all"
+	if (fix[1] == "all")
+	{
+	    fix = allParams
+	}
 	
 	# I need to treat the r parameters a bit differently
 	# as I have just one indicator for them!
@@ -1015,15 +1067,10 @@ createInitLines = function(estimates, outputfile, startingID, fix,
 	}
 	cat(toWrite, file = initFile, append = TRUE)
 	
-	wroteGroupHeader = FALSE
+	writeGroupHeader = FALSE
 	
 	for (est in allEst)
 	{
-		if (est$model != model)
-		{
-			stop('Not all estimates use the same model!\n')
-		}
-		
 		if (model != 'D')
 		{
 			toWrite = paste(fixedInfo[1:(rPos - 1)],
@@ -1047,7 +1094,7 @@ createInitLines = function(estimates, outputfile, startingID, fix,
 		# write to the grouping file
 		if (length(myGroups$groups) < length(myRValues))
 		{
-			if (!wroteGroupHeader)
+			if (!writeGroupHeader)
 			{
 				groupingFile = paste(outputfile, "grouping", sep = "_")
 				cat(paste("# ID no-groups   i j ... k",
@@ -1056,7 +1103,7 @@ createInitLines = function(estimates, outputfile, startingID, fix,
 							 "# where n is the number of sampled sequences\n",
 							 sep = "\n"),
 					 file = groupingFile, append = TRUE)
-				wroteGroupHeader = TRUE
+				writeGroupHeader = TRUE
 			}
 			
 			# first, ID
@@ -1067,10 +1114,9 @@ createInitLines = function(estimates, outputfile, startingID, fix,
 			toWrite = paste(toWrite, paste(myGroups$groups, collapse = ' '), '\n\n')
 			cat(toWrite, file = groupingFile, append = TRUE)
 		}
-		
-		cat('\n', file = initFile, append = TRUE)
 		id = id + 1
 	}
+	cat('\n', file = initFile, append = TRUE)
 }
 
 bootstrapData = function(inputfile, outputfile = NULL, rep = 1)

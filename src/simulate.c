@@ -1,6 +1,6 @@
 /*
  * polyDFE v1.0: predicting DFE and alpha from polymorphism data
- * Copyright (c) 2016  Paula Tataru
+ * Copyright (c) 2018  Paula Tataru
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,6 +17,8 @@
  *
  * Contact: paula@birc.au.dk
  */
+
+#include "simulate.h"
 
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_rng.h>
@@ -66,11 +68,10 @@ void sim_frag(FILE *f, ParamsModel pm, double len, double *expec, gsl_rng *rand)
 
 int sim_data(ParamsModel *pm, double *len, char *filename)
 {
-    printf("Printing from function, Writing to %s %p file\n", filename, filename);
     FILE *f = fopen(filename, "w");
     if (f == NULL)
     {
-        fprintf(stderr, "Simulation failed due to fopen: %s %s\n",
+        fprintf(stderr, "Simulation failed due to fopen on %s: %s\n",
                 filename, strerror(errno));
         return (EXIT_FAILURE);
     }
