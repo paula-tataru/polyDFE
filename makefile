@@ -18,7 +18,7 @@ C_SRCS += \
 ../src/parse.c \
 ../src/run.c \
 ../src/simulate.c \
-../src/transform.c 
+../src/transform.c
 
 OBJS += \
 ./src/basinhopping.o \
@@ -27,7 +27,7 @@ OBJS += \
 ./src/parse.o \
 ./src/run.o \
 ./src/simulate.o \
-./src/transform.o 
+./src/transform.o
 
 C_DEPS += \
 ./src/basinhopping.d \
@@ -36,7 +36,7 @@ C_DEPS += \
 ./src/parse.d \
 ./src/run.d \
 ./src/simulate.d \
-./src/transform.d 
+./src/transform.d
 
 
 %.o: %.c
@@ -45,15 +45,15 @@ C_DEPS += \
 	gcc $(USR_INC) $(OPT) -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
-   
-   
+
+
 all: $(OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: GCC C Linker'
 	gcc -o "polyDFE" $(USR_LIB) $(OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
-    
-    
+
+
 clean:
 	-$(RM) $(EXECUTABLES)$(OBJS)$(C_DEPS) polyDFE
 	-@echo ' '

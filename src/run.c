@@ -1,6 +1,6 @@
 /*
  * polyDFE v1.0: predicting DFE and alpha from polymorphism data
- * Copyright (c) 2016  Paula Tataru and Marco A.P. Franco
+ * Copyright (c) 2018  Paula Tataru and Marco A.P. Franco
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,6 +32,8 @@
 #include "localoptim.h"
 #include "parse.h"
 #include "simulate.h"
+
+#define EXIT_HELP 100
 
 int handle_status(int status, char *filename, int param)
 {
@@ -91,13 +93,13 @@ int handle_status(int status, char *filename, int param)
 
 void print_usage(char *argv, FILE *f)
 {
-    fprintf(f, "Usage: %s -d data_file [-m model(A, B, C, D) [K]] [-t]\n\t"
+    fprintf(f, "%s v1.0\nUsage: %s -d data_file [-m model(A, B, C, D) [K]] [-t]\n\t"
             "{-s m_neut L_neut m_sel L_sel n -i init_file ID"
             " || \n\t[-o optim(bfgs, conj_pr, conj_fr)] [-r range_file ID]"
             "\n\t\t[-i init_file ID [-j]] [-e] [-w] [-g grouping_file ID]"
             "\n\t\t[-p optim_file ID] [-b [basinhop_file ID]]"
             "\n\t\t[-l min] [-v verbose(0, 1, frequency)]}\n",
-            argv);
+            argv, argv);
 }
 
 int parse_options(int argc, char **argv, unsigned *model,
@@ -124,7 +126,7 @@ int parse_options(int argc, char **argv, unsigned *model,
         {
             case 'd':
             {
-                strcpy(*data_file, optarg);
+                (*data_file) = optarg;
                 req_flags[1] = 1;
                 break;
             }
@@ -340,7 +342,7 @@ int parse_options(int argc, char **argv, unsigned *model,
             case 'h':
             {
                 print_usage(argv[0], stdout);
-                return (EXIT_FAILURE);
+                return (EXIT_HELP);
                 break;
             }
             default:
@@ -470,10 +472,10 @@ int simulate(unsigned model, double *sim, char *data_file, char *init_file,
 {
     int parsed = EXIT_SUCCESS;
     int status = EXIT_SUCCESS;
+    char c;
 
     fprintf(stderr, "Warning: simulating data, %s will be overwritten.\n",
             data_file);
-    char c;
     printf("Do you want to continue with simulation? (Y/N): ");
     fflush(stdout);
     c = getchar();
@@ -505,8 +507,7 @@ int simulate(unsigned model, double *sim, char *data_file, char *init_file,
         return (EXIT_FAILURE);
     }
 
-    printf("Printing from main, Writing to %s %p file\n", data_file, data_file);
-    status = sim_data(pm, sim, data_file);
+    status = sim_data(&pm, sim, data_file);
     free_params_model(&pm);
 
     if (status != EXIT_SUCCESS)
@@ -665,16 +666,7 @@ int main(int argc, char **argv)
     setvbuf(stdout, NULL, _IOLBF, 0);
     setvbuf(stderr, NULL, _IOLBF, 0);
 
-    int i;
-    printf("---- Running command\n---- ./polyDFE ");
-    for (i=1; i < argc; i++)
-    {
-        printf("%s ",argv[i]);
-    }
-    printf("\n");
-
     char *data_file = NULL;
-    data_file = malloc(sizeof(char) * 200);
     char *group_file = NULL;
     char *optim_file = NULL;
     char *range_file = NULL;
@@ -701,8 +693,8 @@ int main(int argc, char **argv)
     unsigned method = 1;
     int time = FALSE;
     int verbose = 0;
-    // default limit on running time should be 1h - 60 minutes!
-    int minutes = 60;
+    // default limit on running time should be 5h - 300 minutes!
+    int minutes = 300;
 
     int status = parse_options(argc, argv, &model, &method, &time, &verbose,
                                &minutes, &initial_estimation, &initial_values,
@@ -712,15 +704,32 @@ int main(int argc, char **argv)
                                &basinhop_file, &basinhop_id, &cubature_file,
                                &cubature_id, &sim);
 
-    if (status == EXIT_FAILURE)
+    if (status != EXIT_SUCCESS)
     {
         if (sim)
         {
             free(sim);
         }
-        printf("\n\n");
-        return (EXIT_FAILURE);
+
+        if (status == EXIT_FAILURE)
+        {
+            printf("\n");
+            return (EXIT_FAILURE);
+        }
+        else
+        {
+            printf("\n");
+            return(EXIT_SUCCESS);
+        }
     }
+
+    int i;
+    printf("---- Running command\n---- ./polyDFE ");
+    for (i = 1; i < argc; i++)
+    {
+        printf("%s ",argv[i]);
+    }
+    printf("\n");
 
     // turn off gsl error handler
     gsl_set_error_handler_off();

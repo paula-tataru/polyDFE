@@ -1,6 +1,6 @@
 /*
  * polyDFE v1.0: predicting DFE and alpha from polymorphism data
- * Copyright (c) 2016  Paula Tataru
+ * Copyright (c) 2018  Paula Tataru
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,6 @@
 
 #include "likelihood.h"
 
-int sim_data(ParamsModel pm, double *len, char *filename);
+int sim_data(ParamsModel *pm, double *len, char *filename);
 
 #endif

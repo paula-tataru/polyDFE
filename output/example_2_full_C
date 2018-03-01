@@ -1,0 +1,79 @@
+---- Running command
+---- ./polyDFE -d input/example_2 
+---- Performing inference on input/example_2 using model C
+
+---- Calculating initial values for neutral parameters
+---- Calculating initial values for selection parameters
+
+
+-- Starting local optimization
+ it       eps_an        lambda        theta_bar     a              S_d            b             p_b           S_b           r  2          r  3          r  4          r  5          r  6          r  7          r  8          r  9          r 10          r 11          r 12          r 13          r 14          r 15          r 16          r 17          r 18          r 19          r 20         ln lk             grad     status
+  0       0.10000       0.00469       0.00096       1.68687   -20000.00000       0.40000       0.10000      20.00000       1.26932       1.06401       1.25163       1.44093       0.94223       1.27049       0.92011       1.43326       1.26203       1.22508       1.05543       1.75059       1.28051       1.27830       1.59251       1.88889       2.39344       1.00000       1.00000  -4436.3962278100      6.97275   -2
+244       0.00535       0.00466       0.00089       2.02180     -225.63128       0.41579       0.01082       6.78778       1.11001       1.12753       1.19477       1.20502       0.95063       1.07783       0.88196       1.18721       1.03589       0.91928       0.97409       1.32759       1.00158       1.03656       0.93692       1.15253       1.05879       1.02022       1.00165  -3915.8511931802      0.00264   -3
+-- Local optimization: stuck in the same solution
+
+
+---- Best joint likelihood found -3915.85119 with gradient 0.00264
+-- Model: C
+--     eps_an        eps_cont      lambda        theta_bar     a        
+--     0.00535      0.00e+00       0.00466       0.00089       2.02180  
+--      S_d            b             p_b           S_b      
+--   -225.63128       0.41579       0.01082       6.78778  
+--     r  2          r  3          r  4          r  5          r  6          r  7          r  8          r  9          r 10          r 11          r 12          r 13          r 14          r 15          r 16          r 17          r 18          r 19          r 20     
+--     1.11001       1.12753       1.19477       1.20502       0.95063       1.07783       0.88196       1.18721       1.03589       0.91928       0.97409       1.32759       1.00158       1.03656       0.93692       1.15253       1.05879       1.02022       1.00165  
+
+---- Expected P_neut(i), 0 < i < n (neutral SFS per site) 
+E[P_neut(1)] = 0.000887
+E[P_neut(2)] = 0.000493
+E[P_neut(3)] = 0.000334
+E[P_neut(4)] = 0.000265
+E[P_neut(5)] = 0.000214
+E[P_neut(6)] = 0.000141
+E[P_neut(7)] = 0.000137
+E[P_neut(8)] = 0.000098
+E[P_neut(9)] = 0.000117
+E[P_neut(10)] = 0.000092
+E[P_neut(11)] = 0.000075
+E[P_neut(12)] = 0.000073
+E[P_neut(13)] = 0.000091
+E[P_neut(14)] = 0.000064
+E[P_neut(15)] = 0.000062
+E[P_neut(16)] = 0.000053
+E[P_neut(17)] = 0.000062
+E[P_neut(18)] = 0.000055
+E[P_neut(19)] = 0.000052
+
+---- Expected P_sel(i), 0 < i < n (selected SFS per site) 
+E[P_sel(1)] = 0.000314
+E[P_sel(2)] = 0.000119
+E[P_sel(3)] = 0.000067
+E[P_sel(4)] = 0.000047
+E[P_sel(5)] = 0.000035
+E[P_sel(6)] = 0.000022
+E[P_sel(7)] = 0.000020
+E[P_sel(8)] = 0.000014
+E[P_sel(9)] = 0.000016
+E[P_sel(10)] = 0.000012
+E[P_sel(11)] = 0.000010
+E[P_sel(12)] = 0.000009
+E[P_sel(13)] = 0.000012
+E[P_sel(14)] = 0.000008
+E[P_sel(15)] = 0.000008
+E[P_sel(16)] = 0.000007
+E[P_sel(17)] = 0.000008
+E[P_sel(18)] = 0.000008
+E[P_sel(19)] = 0.000008
+
+---- Expected D_neut and D_sel (neutral and selected divergence per site) 
+E[D_neut] = 0.004704
+E[D_sel] = 0.000780
+
+---- Expected neutral and selected misattributed polymorphism per site
+E[mis_neut] = 0.000045
+E[mis_sel] = 0.000007
+
+---- alpha_div = 0.447190
+---- alpha_dfe = 0.455857
+
+
+

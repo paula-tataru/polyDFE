@@ -1,0 +1,81 @@
+---- Running command
+---- ./polyDFE -d input/example_2 -i input/init_model_BandC.txt 2 -v 100 
+---- Performing inference on input/example_2 using model C
+
+---- The initial value of a selection parameter did not fit the given ranges. The ranges have been adjusted automatically.
+---- Using provided initial values
+
+
+-- Starting local optimization
+ it       eps_an        lambda        theta_bar     a              S_d            b             r  2          r  3          r  4          r  5          r  6          r  7          r  8          r  9          r 10          r 11          r 12          r 13          r 14          r 15          r 16          r 17          r 18          r 19          r 20         ln lk             grad     status
+  0      4.50e-06       0.00500       0.00100       2.00000     -400.00000      14.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000  -110410.3134438305    373.56758   -2
+100      4.66e-06       0.00541       0.00093       2.00227     -612.16519       0.29326       1.05136       1.04510       1.09821       1.10215       0.86249       0.98308       0.80812       1.09116       0.95347       0.84887       0.89765       1.23415       0.93792       0.98474       0.90754       1.13346       1.08678       1.15216       1.02643  -3919.4162361903      0.01038   -2
+200      4.67e-06       0.00537       0.00094       2.00114     -811.53030       0.27840       1.05447       1.04430       1.09343       1.09849       0.85972       0.97723       0.79756       1.07640       0.94200       0.84130       0.89007       1.22172       0.92936       0.97488       0.89872       1.12218       1.07551       1.13996       1.02870  -3919.3529930410      0.00053   -5
+214      4.67e-06       0.00537       0.00094       2.00115     -811.32767       0.27841       1.05460       1.04448       1.09359       1.09863       0.85983       0.97741       0.79767       1.07657       0.94215       0.84143       0.89021       1.22190       0.92950       0.97516       0.89885       1.12234       1.07569       1.14015       1.02875  -3919.3529865818      0.00008    0
+-- Found new optimum with likelihood -3919.35299 and gradient 0.00008
+
+
+---- Best joint likelihood found -3919.35299 with gradient 0.00008
+-- Model: C
+--     eps_an        eps_cont      lambda        theta_bar     a        
+--    4.67e-06      0.00e+00       0.00537       0.00094       2.00115  
+--      S_d            b             p_b           S_b      
+--   -811.32767       0.27841      0.00e+00      0.00e+00  
+--     r  2          r  3          r  4          r  5          r  6          r  7          r  8          r  9          r 10          r 11          r 12          r 13          r 14          r 15          r 16          r 17          r 18          r 19          r 20     
+--     1.05460       1.04448       1.09359       1.09863       0.85983       0.97741       0.79767       1.07657       0.94215       0.84143       0.89021       1.22190       0.92950       0.97516       0.89885       1.12234       1.07569       1.14015       1.02875  
+
+---- Expected P_neut(i), 0 < i < n (neutral SFS per site) 
+E[P_neut(1)] = 0.000943
+E[P_neut(2)] = 0.000497
+E[P_neut(3)] = 0.000328
+E[P_neut(4)] = 0.000258
+E[P_neut(5)] = 0.000207
+E[P_neut(6)] = 0.000135
+E[P_neut(7)] = 0.000132
+E[P_neut(8)] = 0.000094
+E[P_neut(9)] = 0.000113
+E[P_neut(10)] = 0.000089
+E[P_neut(11)] = 0.000072
+E[P_neut(12)] = 0.000070
+E[P_neut(13)] = 0.000089
+E[P_neut(14)] = 0.000063
+E[P_neut(15)] = 0.000061
+E[P_neut(16)] = 0.000053
+E[P_neut(17)] = 0.000062
+E[P_neut(18)] = 0.000056
+E[P_neut(19)] = 0.000057
+
+---- Expected P_sel(i), 0 < i < n (selected SFS per site) 
+E[P_sel(1)] = 0.000298
+E[P_sel(2)] = 0.000118
+E[P_sel(3)] = 0.000068
+E[P_sel(4)] = 0.000049
+E[P_sel(5)] = 0.000037
+E[P_sel(6)] = 0.000023
+E[P_sel(7)] = 0.000022
+E[P_sel(8)] = 0.000015
+E[P_sel(9)] = 0.000017
+E[P_sel(10)] = 0.000013
+E[P_sel(11)] = 0.000011
+E[P_sel(12)] = 0.000010
+E[P_sel(13)] = 0.000013
+E[P_sel(14)] = 0.000009
+E[P_sel(15)] = 0.000008
+E[P_sel(16)] = 0.000007
+E[P_sel(17)] = 0.000008
+E[P_sel(18)] = 0.000007
+E[P_sel(19)] = 0.000007
+
+---- Expected D_neut and D_sel (neutral and selected divergence per site) 
+E[D_neut] = 0.005416
+E[D_sel] = 0.000685
+
+---- Expected neutral and selected misattributed polymorphism per site
+E[mis_neut] = 0.000049
+E[mis_sel] = 0.000006
+
+---- alpha_div = 0.226247
+---- alpha_dfe = 0.000000
+
+
+
