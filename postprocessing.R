@@ -90,6 +90,10 @@ extractInfo = function(lines, init = FALSE)
     
     values = NULL
     
+    # find out on what file I ran polyDFE
+    pos = findPos('-- Performing inference', lines)[1]
+    filename = strsplit(lines[pos], split = ' ')[[1]][5]
+    
     # find out which are the estimated parameters
     # the info is in the line following -- Starting local optimization
     pos = findPos('-- Starting local optimization', lines)[1] + 1
@@ -226,17 +230,18 @@ extractInfo = function(lines, init = FALSE)
     # expectations are in the order
     # P_neut, P_sel, D_neut, D_sel, mis_neut, mis_sel
     pos = findPos('---- Expected', lines)
-    if (length(pos) == 0)
-    {
-        # no expectations
-        return(list(
-            model = model,
-            lk = lk,
-            grad = grad,
-            values = values,
-            estimated = estimated
-        ))
-    }
+    # older versions of polyDFE didn't return expectations
+    # if (length(pos) == 0)
+    # {
+    #     # no expectations
+    #     return(list(
+    #         model = model,
+    #         lk = lk,
+    #         grad = grad,
+    #         values = values,
+    #         estimated = estimated
+    #     ))
+    # }
     # first, figure out n
     n = pos[2] - pos[1]
     # also, figure out where expectations end
@@ -279,6 +284,7 @@ extractInfo = function(lines, init = FALSE)
     
     return(
         list(
+            input = filename,
             model = model,
             lk = lk,
             grad = grad,
@@ -470,20 +476,73 @@ getDiscretizedDFE = function(estimates, sRanges = c(-100, -10, -1, 0, 1, 10))
                 "from the list returned by parseOutput")
         return(NULL)
     }
+    # add -Inf and Inf to range so I can calculate integrals
+    # make sure sRanges is sorted
+    sRanges = sort(sRanges)
+    sRanges = c(-Inf, sRanges, Inf)
+    
 	model = estimates$model
 	params = estimates$values
-	# add -Inf and Inf to range so I can calculate integrals
-	# make sure sRanges is sorted
-	sRanges = sort(sRanges)
-	sRanges = c(-Inf, sRanges, Inf)
 	# calculate integrals
+	# if not using model D, 
+	# I need to calculate the tails of the distributions
+	# for a better integration
+	if (model != 'D')
+	{
+	    tails = rep(0, 2)
+	    if (model == 'A')
+	    {
+	        S_max = params["S_max"]
+	        S_bar = params["S_bar"]
+	    } else
+	    {
+	        S_max = 0
+	        S_bar = params["S_d"]
+	    }
+	    tails[1] = S_max - qgamma(p = 0.99999999, shape = params["b"], 
+	                              scale = (S_max - S_bar) / params["b"])
+	    if (model == 'A')
+	    {
+	        tails[2] = S_max
+	    } else if (model == 'B')
+	    {
+	        tails[2] = params['S_b']
+	    } else
+	    {
+	        tails[2] = qexp(p = 0.99999999, rate = 1 / params['S_b'])
+	    }
+	} else
+	{
+	    tails = c(-Inf, Inf)
+	}
 	dfe = rep(0, length(sRanges) - 1)
 	for (i in 1:(length(sRanges) - 1))
 	{
-		dfe[i] = integrate(getDensity,
-								 sRanges[i], sRanges[i + 1],
-								 model, params)$value
+	    inTail = which(sRanges[i] < tails & tails < sRanges[i + 1])
+	    if (length(inTail) > 0)
+	    {
+	        dfe[i] = (integrate(getDensity,
+	                         sRanges[i], tails[inTail],
+	                         model, params)$value 
+	                  + integrate(getDensity,
+	                              tails[inTail], sRanges[i + 1],
+	                              model, params)$value)
+	    } else
+	    {
+	        # "default" integration
+	        dfe[i] = integrate(getDensity,
+	                           sRanges[i], sRanges[i + 1],
+	                           model, params)$value        
+	    }
 	}
+	# check it sums to almost 1
+	if (!isTRUE(all.equal(sum(dfe), 1)))
+	{
+	    warning("Numerical integration of the DFE failed, ",
+	            "discretized DFE sums to ", sum(dfe), 
+	            "\n\tDiscretized DFE has been rescaled to sum to 1.")
+	}
+	dfe = dfe / sum(dfe)
 	names(dfe) = toNames(sRanges[2:(length(sRanges) - 1)])
 	return(dfe)
 }
@@ -637,8 +696,8 @@ estimateAlpha = function(estimates, supLimit = 0, div = NULL, poly = TRUE)
 		if (supLimit > 0)
 		{
 			divDel = divDel + integrate(getDivergenceExpectation,
-												 lower = 0, upper = supLimit,
-												 model = model, params = values)$value
+			                            lower = 0, upper = supLimit,
+			                            model = model, params = values)$value
 		}	
 	} else
 	{
@@ -680,7 +739,7 @@ estimateAlpha = function(estimates, supLimit = 0, div = NULL, poly = TRUE)
 			# use the tail for integration for model C
 		  if (model == 'C')
 		  {
-		    tail = qexp(p = 0.999999, rate = 1 / values['S_b'])
+		    tail = qexp(p = 0.99999999, rate = 1 / values['S_b'])
 		  }
 			if (tail < supLimit)
 			{

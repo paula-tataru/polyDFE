@@ -51,9 +51,13 @@ for (filename in polyDFEfiles)
     est = c(est, parseOutput(filename))
 }
 print(length(est))
+
 # what are the gradients?
 print(sapply(est, function(e) e$grad))
 # none of them are particullary large, so the optimization was most likely succesfull
+
+# on what input files was polyDFE ran?
+print(sapply(est, function(e) e$input))
 
 ########################### 
 ## summarize the DFE
