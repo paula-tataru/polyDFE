@@ -51,7 +51,6 @@ struct params_model_s
                         ///< tells if I am using divergence r or not
 
     double eps_an;      ///< error in determining the ancestral allele
-    double eps_cont;    ///< error in neutral sites contamined with selected sites
     double lambda;      ///< divergence parameter
     double theta_bar;   ///< mean of distribution of mutation rates
     double a;           ///< shape of distribution of mutation rates
@@ -75,8 +74,6 @@ struct params_model_s
     double r_max;
     double eps_an_min;
     double eps_an_max;
-    double eps_cont_min;
-    double eps_cont_max;
     double lambda_min;
     double lambda_max;
     double theta_bar_min;
@@ -91,7 +88,6 @@ struct params_model_s
     /* Flags for which parameters to estimate */
     int r_flag;
     int eps_an_flag;
-    int eps_cont_flag;
     int lambda_flag;
     int theta_bar_flag;
     int a_flag;
@@ -160,15 +156,13 @@ void free_params(Params *p);
 void copy_params_model(ParamsModel *pm, ParamsModel source);
 
 void set_params_sel(ParamsModel *pm, int no_steps, int *it);
-void set_params_eps(ParamsModel *pm, int no_steps, int *it);
+void set_params_eps(ParamsModel *pm, int no_steps, int it);
 
 void count_params(ParamsModel *pm);
 
 int set_sel_expec(ParamsModel *pm, double **expec, unsigned negative_only);
 void set_neut_expec(ParamsModel pm, double **expec_neut);
 void set_anc_expec(double eps_an, int n, double **expec);
-void set_cont_expec(double eps_cont, int n, double **expec_neut,
-                    double *expec_sel);
 
 void set_sel_lnL(Params *p);
 void set_neut_lnL(Params *p);

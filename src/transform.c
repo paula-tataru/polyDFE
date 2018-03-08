@@ -131,14 +131,6 @@ void transform(gsl_vector **x, ParamsModel pm)
         gsl_vector_set((*x), i++,
                        tran(pm.eps_an, pm.eps_an_min, pm.eps_an_max, pm.k));
     }
-    if (pm.eps_cont_flag == TRUE)
-    {
-        gsl_vector_set((*x),
-                       i++,
-                       tran(pm.eps_cont, pm.eps_cont_min, pm.eps_cont_max,
-                            pm.k));
-    }
-
 
     // b - position 1 - should be transformed around one
     // everything else has the normal transformation
@@ -199,11 +191,6 @@ void undo_transform(ParamsModel *pm, const gsl_vector *x)
     {
         pm->eps_an = untran(gsl_vector_get(x, i++), pm->eps_an_min,
                             pm->eps_an_max, pm->k);
-    }
-    if (pm->eps_cont_flag == TRUE)
-    {
-        pm->eps_cont = untran(gsl_vector_get(x, i++), pm->eps_cont_min,
-                              pm->eps_cont_max, pm->k);
     }
 
     // b - position 1 - should be transformed around one
@@ -297,13 +284,7 @@ void random_step(ParamsModel *pm, double step)
                         untran_step(step, pm->eps_an_max - pm->eps_an_min, pm->k),
                         pm->eps_an, pm->eps_an_min, pm->eps_an_max);
     }
-    if (pm->eps_cont_flag == TRUE)
-    {
-        pm->eps_cont = one_step(
-                        untran_step(step, pm->eps_cont_max - pm->eps_cont_min, pm->k),
-                        pm->eps_cont, pm->eps_cont_min, pm->eps_cont_max);
-    }
-
+    
     if (pm->model < 4)
     {
         for (i = 0; i < pm->no_sel; i++)

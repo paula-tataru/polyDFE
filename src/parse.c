@@ -310,13 +310,20 @@ int parse_range(ParamsModel *pm, double *temp)
     unsigned i = 1;
     unsigned j = 0;
 
+    // I do not use eps_cont anymore
+    // but I still read it for backward compatibility
+    double eps_cont = 0;
+
     pm->k = temp[i++];
     pm->eps_an_min = temp[i++];
     pm->eps_an_max = temp[i++];
-    pm->eps_cont_min = temp[i++];
-    pm->eps_cont_max = temp[i++];
+    eps_cont = temp[i++];
+    eps_cont = temp[i++];
     pm->lambda_min = temp[i++];
     pm->lambda_max = temp[i++];
+
+    // get rid of warning for eps_cont
+    eps_cont++;
 
     // parameters for mutation distribution
     pm->theta_bar_min = temp[i++];
@@ -352,8 +359,6 @@ int parse_range(ParamsModel *pm, double *temp)
     status += check_lim(pm->k, 0, DBL_MAX);
     status += check_lim(pm->eps_an_min, 0, pm->eps_an_max);
     status += check_lim(pm->eps_an_max, 0, 1);
-    status += check_lim(pm->eps_cont_min, 0, pm->eps_cont_max);
-    status += check_lim(pm->eps_cont_max, 0, 1);
     status += check_lim(pm->lambda_min, 0, pm->lambda_max);
     status += check_lim(pm->lambda_max, 0, 10);
     status += check_lim(pm->theta_bar_min, 0, pm->theta_bar_max);
@@ -409,15 +414,22 @@ int parse_init(ParamsModel *pm, double *temp, int check_range)
     unsigned i = 1;
     unsigned j = 0;
 
+    // I do not use eps_cont anymore
+    // but I still read it for backward compatibility
+    double eps_cont = 0;
+
     // 1 is TRUE and 0 is FALSE but
     // 1 is fix and 0 is estimate
     // so I need to get 1 - temp!
     pm->eps_an_flag = 1 - temp[i++];
     pm->eps_an = temp[i++];
-    pm->eps_cont_flag = 1 - temp[i++];
-    pm->eps_cont = temp[i++];
+    eps_cont = 1 - temp[i++];
+    eps_cont = temp[i++];
     pm->lambda_flag = 1 - temp[i++];
     pm->lambda = temp[i++];
+
+    // get rid of warning for eps_cont
+    eps_cont++;
 
     // parameters for mutation distribution
     pm->theta_bar_flag = 1 - temp[i++];
@@ -475,13 +487,6 @@ int parse_init(ParamsModel *pm, double *temp, int check_range)
         {
             status += check_lim_update(&pm->eps_an, &pm->eps_an_min, &pm->eps_an_max,
                                                pm->eps_an_flag, "eps_an");
-        }
-        status += check_lim(pm->eps_cont_flag, 0, 1);
-        if (pm->eps_cont_flag == FALSE || pm->initial_values == TRUE)
-        {
-            status += check_lim_update(&pm->eps_cont, &pm->eps_cont_min,
-                                       &pm->eps_cont_max,
-                                       pm->eps_cont_flag, "eps_cont");
         }
         status += check_lim(pm->lambda_flag, 0, 1);
         if (pm->lambda_flag == FALSE || pm->initial_values == TRUE)

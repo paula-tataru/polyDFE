@@ -476,6 +476,7 @@ int simulate(unsigned model, double *sim, char *data_file, char *init_file,
 
     fprintf(stderr, "Warning: simulating data, %s will be overwritten.\n",
             data_file);
+    fflush(stderr);
     printf("Do you want to continue with simulation? (Y/N): ");
     fflush(stdout);
     c = getchar();

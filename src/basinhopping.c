@@ -146,14 +146,11 @@ void set_obs_diff(Params *p, int i, int j, double **obs, double *obs_sel)
     }
 
     // calculate tilde{p_j} and tilde{p_{n-j}}
-    (*obs)[0] = (p->counts_neut[i].sfs[j - 1] / len
-                    - p->pm->eps_cont * obs_sel[j - 1]) / (1 - p->pm->eps_cont);
+    (*obs)[0] = p->counts_neut[i].sfs[j - 1] / len;
 
     if (j < p->pm->n)
     {
-        (*obs)[1] = (p->counts_neut[i].sfs[p->pm->n - j - 1] / len
-                        - p->pm->eps_cont * obs_sel[p->pm->n - j - 1])
-                        / (1 - p->pm->eps_cont);
+        (*obs)[1] = p->counts_neut[i].sfs[p->pm->n - j - 1] / len;
     }
 }
 
@@ -348,33 +345,26 @@ int estimate_grid_neut(Params *p, int no_grids)
 
     set_expec_sel_to_obs(p, &p->expec_sel);
 
-    int it[2] = { 0, 0 };
+    int it = 0;
 
-    if (p->pm->eps_an_flag == FALSE && p->pm->eps_cont_flag == FALSE)
+    if (p->pm->eps_an_flag == FALSE)
     {
         best_status = estimate_neut(p);
         copy_params_model(&best_pm, *p->pm);
     }
     else
     {
-        for (it[0] = 0; it[0] <= no_grids; it[0]++)
+        for (it = 0; it <= no_grids; it++)
         {
-            for (it[1] = 0; it[1] <= no_grids; it[1]++)
+            curr_status = EXIT_SUCCESS;
+            set_params_eps(p->pm, no_grids, it);
+            curr_status += estimate_neut(p);
+            set_neut_lnL(p);
+            if (p->lnL_neut > best_lk)
             {
-                curr_status = EXIT_SUCCESS;
-                set_params_eps(p->pm, no_grids, it);
-                curr_status += estimate_neut(p);
-                set_neut_lnL(p);
-                if (p->lnL_neut > best_lk)
-                {
-                    best_lk = p->lnL_neut;
-                    best_status = curr_status;
-                    copy_params_model(&best_pm, *p->pm);
-                }
-                if (p->pm->eps_an_flag == FALSE || p->pm->eps_cont_flag == FALSE)
-                {
-                    break;
-                }
+                best_lk = p->lnL_neut;
+                best_status = curr_status;
+                copy_params_model(&best_pm, *p->pm);
             }
         }
     }
@@ -462,8 +452,9 @@ int estimate_grid(Params *p)
 
         if (status != EXIT_SUCCESS)
         {
-            printf("---- Warning: some of the estimated parameters did not fit "
-                   "the given ranges. The ranges have been adjusted automatically.\n");
+            fprintf(stderr,
+                    "---- Warning: some of the estimated parameters did not fit "
+                    "the given ranges. The ranges have been adjusted automatically.\n");
         }
     }
 
@@ -694,7 +685,8 @@ int run_basin_hopping(ParamsBasinHop *pb,
     // check that I have at least two fragments for estimating a
     if (p->no_neut == 1 && p->no_sel == 1 && p->pm->a != -1)
     {
-        printf("---- Warning: mutation variability is not used "
+        fprintf(stderr,
+                "---- Warning: mutation variability is not used "
                 "when only one neutral and one selected fragment is available.\n");
         p->pm->a = -1;
     }

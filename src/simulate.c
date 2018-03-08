@@ -92,8 +92,6 @@ int sim_data(ParamsModel *pm, double *len, char *filename)
     // add ancestral error
     set_anc_expec(pm->eps_an, pm->n, &sel);
     set_anc_expec(pm->eps_an, pm->n, &neut);
-    // add contamination error for neutral expectation
-    set_cont_expec(pm->eps_cont, pm->n, &neut, sel);
 
     // random number generator
     gsl_rng *rand = NULL;

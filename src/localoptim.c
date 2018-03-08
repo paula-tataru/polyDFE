@@ -62,10 +62,6 @@ void print_hearder_solution_neut(ParamsModel pm, int with_fixed, FILE *f)
     {
         fprintf(f, "     eps_an   ");
     }
-    if (pm.eps_cont_flag == TRUE || with_fixed == TRUE)
-    {
-        fprintf(f, "     eps_cont ");
-    }
     if ((pm.lambda_flag == TRUE || with_fixed == TRUE) && pm.div_flag == TRUE)
     {
         fprintf(f, "     lambda   ");
@@ -237,10 +233,6 @@ void print_solution_neut(ParamsModel pm, int with_fixed, gsl_vector *x, char *s,
     if (pm.eps_an_flag == TRUE || with_fixed == TRUE)
     {
         print_with_space(&s, pm.eps_an, f);
-    }
-    if (pm.eps_cont_flag == TRUE || with_fixed == TRUE)
-    {
-        print_with_space(&s, pm.eps_cont, f);
     }
     if ((pm.lambda_flag == TRUE || with_fixed == TRUE) && pm.div_flag == TRUE)
     {
