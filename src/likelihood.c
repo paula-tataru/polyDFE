@@ -835,7 +835,7 @@ double get_sel_expec_fix_sel(ParamsModel *pm, double S)
     return (div / meS);
 }
 
-double get_integrand_disp_ref_gamma(double S, void *pv)
+double get_disp_ref_gamma(double S, void *pv)
 {
     ParamsModel *pm = (ParamsModel *) pv;
     double s_bar = pm->sel_params[0];
@@ -846,7 +846,7 @@ double get_integrand_disp_ref_gamma(double S, void *pv)
     {
         s_max = pm->sel_params[2];
     }
-    // undisplace and unreflect mean both x[0] and s_bar
+    // undisplace and unreflect both S and s_bar
     double phi = gsl_ran_gamma_pdf(s_max - S, b, (s_max - s_bar) / b);
 
     if (gsl_isinf(phi) == 1)
@@ -854,7 +854,13 @@ double get_integrand_disp_ref_gamma(double S, void *pv)
         phi = DBL_MAX;
     }
 
-    return (phi * get_sel_expec_fix_sel(pm, S));
+    return (phi);
+}
+
+double get_integrand_disp_ref_gamma(double S, void *pv)
+{
+    return (get_disp_ref_gamma(S, pv)
+            * get_sel_expec_fix_sel((ParamsModel *) pv, S));
 }
 
 double get_integrand_exp(double S, void *pv)
@@ -884,6 +890,12 @@ int integrate_sel_expec(ParamsModel *pm, int no_expec, double **expec, double p,
     gsl_function F;
     F.function = func;
     F.params = pm;
+
+    // update p
+    if (gsl_isnan(p))
+    {
+        p = 1;
+    }
 
     // integrate each expectation separately
     for (pm->i = 0; pm->i < no_expec; pm->i++)
@@ -969,8 +981,8 @@ int set_sel_expec(ParamsModel *pm, double **expec, unsigned negative_only)
         {
             s_max = pm->sel_params[2];
         }
-        // p_b is 0 for model A
-        double p_b = 0;
+        // p_b is not defined for model A
+        double p_b = GSL_NAN;
         double s_b = 0;
         if (pm->model != 1)
         {

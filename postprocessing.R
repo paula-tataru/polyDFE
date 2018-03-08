@@ -230,18 +230,6 @@ extractInfo = function(lines, init = FALSE)
     # expectations are in the order
     # P_neut, P_sel, D_neut, D_sel, mis_neut, mis_sel
     pos = findPos('---- Expected', lines)
-    # older versions of polyDFE didn't return expectations
-    # if (length(pos) == 0)
-    # {
-    #     # no expectations
-    #     return(list(
-    #         model = model,
-    #         lk = lk,
-    #         grad = grad,
-    #         values = values,
-    #         estimated = estimated
-    #     ))
-    # }
     # first, figure out n
     n = pos[2] - pos[1]
     # also, figure out where expectations end
@@ -384,74 +372,123 @@ parseDivergenceData = function(filename)
 	return(div)
 }
 
-densRefDisGamma = function(S, S_bar, b, S_max = 0)
+getQuantiles = function(est)
 {
-	dgamma(S_max - S, shape = b, scale = (S_max - S_bar) / b)
+    model = est$model
+    values = est$values
+    
+    if (model == "D")
+    {
+        return(list(q = NULL, p = NULL, m = NULL))
+    }
+    
+    sep = 0.0005
+    p = seq(from = 0.0, to = 1, by = sep)
+    p[1] = 1 - 0.99999999
+    p[length(p)] = 0.99999999
+    n = length(p)
+    q = c()
+    # I have to store the corresponding probabilities too
+    prob = c()
+    if (model != 'D')
+    {
+        if (model == 'A')
+        {
+            S_max = values["S_max"]
+            S_bar = values["S_bar"]
+        } else
+        {
+            S_max = 0
+            S_bar = values["S_d"]
+        }
+        q = S_max - qgamma(p, shape = values["b"], 
+                           scale = (S_max - S_bar) / values["b"], 
+                           lower.tail = FALSE)
+        # last quantile should in fact be S_max
+        q[length(q)] = S_max
+        prob = rep(sep, n - 1)
+        if (model == 'B')
+        {
+            q = c(q, values['S_b'])
+            prob = prob * (1 - values["p_b"])
+            prob = c(prob, values["p_b"])
+        } else if (model == 'C')
+        {
+            q = c(q[2:length(q)], qexp(p, rate = 1 / values['S_b']))
+            prob = prob * (1 - values["p_b"])
+            prob = c(prob, rep(sep, n - 1) * values["p_b"])
+        }
+    }
+    # make the quantiles unique
+    newQ = q[1]
+    newP = prob[1]
+    for (i in 2:(length(q) - 1))
+    {
+        if (q[i] == q[i - 1])
+        {
+            newP[length(newP)] = newP[length(newP)] + prob[i]
+        } else
+        {
+            newQ = c(newQ, q[i])
+            newP = c(newP, prob[i])
+        }
+    }
+    # deal with the last interval - increase the last quantile if equal
+    i = length(q)
+    if (q[i] == q[i - 1])
+    {
+        q[i] = q[i] + 1e-7
+    } 
+    newQ = c(newQ, q[i])
+    q = newQ
+    prob = newP
+    
+    # check probabilities sum to 1
+    if (!isTRUE(all.equal(sum(prob), 1)))
+    {
+        stop("Numerical integration failed, probabilities don't sum up to 1.")
+    }
+    
+    # calculate mid-points
+    mid = (q[1:(length(q) - 1)] + q[2:length(q)]) / 2
+    
+    return(list(q = q, p = prob, m = mid))
 }
 
-extractSP = function(params)
+altIntegrate = function(f, lower, upper, quantiles, ...)
 {
-	sp = unlist(strsplit(names(params[grep('S_p', names(params))]), split = ' '))
+    q = quantiles$q
+    # sum up the probabilties for the quantiles that are between lower and upper
+    pos = which(lower <= q & q <= upper)
+    # mid and prob i is for interval [i, i + 1]
+    # that means that I always have to skip the last entry in pos
+    pos = pos[-length(pos)]
+    value = sum(quantiles$p[pos] * f(quantiles$m[pos], ...))
+    # now I have to deal with the cases where lower and upper
+    # are found between quantiles and I need to split an interval
+    if (lower > q[1] && !(lower %in% q))
+    {
+        i = which(lower > q)
+        i = length(i)
+        prop = (q[i + 1] - lower) / (q[i + 1] - q[i])
+        value = value + prop * quantiles$p[i] * f(quantiles$m[i], ...)
+    }
+    if (upper < q[length(q)] && !(upper %in% q))
+    {
+        i = which(upper < q)
+        i = i[1] - 1
+        prop = (upper - q[i]) / (q[i + 1] - q[i])
+        value = value + prop * quantiles$p[i] * f(quantiles$m[i], ...)
+    }
+    
+    return(value)
+}
+
+extractSP = function(values)
+{
+	sp = unlist(strsplit(names(values[grep('S_p', names(values))]), split = ' '))
 	sp = as.numeric(sp[seq(from = 2, to = length(sp), by = 2)])
 	return(sp)
-}
-
-getDensity = function(S, model, params)
-{
-	dens = rep(0, length(S))
-	pos = which(S >= 0, arr.ind = T)
-	neg = which(S < 0, arr.ind = T)
-	if (model == 'A')
-	{
-		# reflected displaced gamma
-		dens = densRefDisGamma(S, params['S_bar'], params['b'], params['S_max'])
-	}
-	if (model == 'B')
-	{
-		if (length(neg) > 0)
-		{
-			# reflected gamma
-			dens[neg] = (1 - params['p_b']) * 
-								densRefDisGamma(S[neg], params['S_d'], params['b'])
-		}
-		if (length(pos) > 0)
-		{
-			# spike at S_b
-			dens[pos] = params['p_b'] * (S[pos] == params['S_b'])
-		}
-	}
-	if (model == 'C')
-	{
-		# mixture of reflected gamma and exponential
-		if (length(neg) > 0)
-		{
-			# reflected gamma
-			dens[neg] = (1 - params['p_b']) * 
-								densRefDisGamma(S[neg], params['S_d'], params['b'])
-		}
-		if (length(pos) > 0)
-		{
-			# exponential
-			if (params['p_b'] > 0 && params['S_b'] > 0)
-			{
-				dens[pos] = params['p_b'] * dexp(S[pos], rate = 1 / params['S_b'])
-			} else
-			{
-				dens[pos] = 0
-			}
-		}
-	}
-	if (model == 'D')
-	{
-		# extract the S_p values
-		sp = extractSP(params)
-		params = params[grep('S_p', names(params))]
-		names(params) = sp
-		pos = which(S %in% sp)
-		dens[pos] = params[as.character(S[pos])]
-	}
-	
-	return(dens)
 }
 
 toNames = function(ranges)
@@ -465,15 +502,21 @@ toNames = function(ranges)
 	return(names)
 }
 
+cdfRefDisGamma = function(S, S_bar, b, S_max = 0)
+{
+    pgamma(S_max - S, shape = b, scale = (S_max - S_bar) / b, 
+           lower.tail = FALSE)
+}
+
 getDiscretizedDFE = function(estimates, sRanges = c(-100, -10, -1, 0, 1, 10))
 {
     # if the list doesn't contain model
     # but it's entry does
-    # throw a warning 
+    # throw an error
     if (!("model" %in% names(estimates)) && ("model" %in% names(estimates[[1]])))
     {
-        warning("estimates should contain just one entry ",
-                "from the list returned by parseOutput")
+        stop("estimates should contain just one entry ",
+             "from the list returned by parseOutput")
         return(NULL)
     }
     # add -Inf and Inf to range so I can calculate integrals
@@ -481,70 +524,69 @@ getDiscretizedDFE = function(estimates, sRanges = c(-100, -10, -1, 0, 1, 10))
     sRanges = sort(sRanges)
     sRanges = c(-Inf, sRanges, Inf)
     
-	model = estimates$model
-	params = estimates$values
-	# calculate integrals
-	# if not using model D, 
-	# I need to calculate the tails of the distributions
-	# for a better integration
-	if (model != 'D')
-	{
-	    tails = rep(0, 2)
-	    if (model == 'A')
-	    {
-	        S_max = params["S_max"]
-	        S_bar = params["S_bar"]
-	    } else
-	    {
-	        S_max = 0
-	        S_bar = params["S_d"]
-	    }
-	    tails[1] = S_max - qgamma(p = 0.99999999, shape = params["b"], 
-	                              scale = (S_max - S_bar) / params["b"])
-	    if (model == 'A')
-	    {
-	        tails[2] = S_max
-	    } else if (model == 'B')
-	    {
-	        tails[2] = params['S_b']
-	    } else
-	    {
-	        tails[2] = qexp(p = 0.99999999, rate = 1 / params['S_b'])
-	    }
-	} else
-	{
-	    tails = c(-Inf, Inf)
-	}
-	dfe = rep(0, length(sRanges) - 1)
-	for (i in 1:(length(sRanges) - 1))
-	{
-	    inTail = which(sRanges[i] < tails & tails < sRanges[i + 1])
-	    if (length(inTail) > 0)
-	    {
-	        dfe[i] = (integrate(getDensity,
-	                         sRanges[i], tails[inTail],
-	                         model, params)$value 
-	                  + integrate(getDensity,
-	                              tails[inTail], sRanges[i + 1],
-	                              model, params)$value)
-	    } else
-	    {
-	        # "default" integration
-	        dfe[i] = integrate(getDensity,
-	                           sRanges[i], sRanges[i + 1],
-	                           model, params)$value        
-	    }
-	}
-	# check it sums to almost 1
-	if (!isTRUE(all.equal(sum(dfe), 1)))
-	{
-	    warning("Numerical integration of the DFE failed, ",
-	            "discretized DFE sums to ", sum(dfe), 
-	            "\n\tDiscretized DFE has been rescaled to sum to 1.")
-	}
-	dfe = dfe / sum(dfe)
-	names(dfe) = toNames(sRanges[2:(length(sRanges) - 1)])
-	return(dfe)
+    model = estimates$model
+    values = estimates$values
+    
+    # the get the discretized DFE, I use the CDF functions
+    if (model == "A")
+    {
+        # displaced reflected Gamma
+        cdf = cdfRefDisGamma(sRanges, values["S_bar"], values["b"], values["S_max"])
+    } else if (model == "B" || model == "C")
+    {
+        # I have to add 0 to sRanges if it's not part of it
+        newRanges = sort(unique(c(sRanges, 0)))
+        pos = which(newRanges == 0)
+        # displaced Gamma for the negative side
+        cdfDel = ((1 - values["p_b"]) 
+                  * cdfRefDisGamma(newRanges[1:pos], values["S_d"], values["b"]))
+        # positive side
+        if (model == "B")
+        {
+            cdfBen = rep(values["p_b"], length(newRanges) - pos)
+            pos = which(newRanges[pos:length(newRanges)] <= values["S_b"])
+            pos = pos[length(pos)] - 1
+            cdfBen[1:pos] = 0
+        } else
+        {
+            # exponenetial for the positive side
+            cdfBen = (values["p_b"] 
+                      * pexp(newRanges[(pos + 1):length(newRanges)], 
+                             rate = 1 / values["S_b"]))
+        }
+        cdf = c(cdfDel, cdfDel[length(cdfDel)] + cdfBen)
+        # if 0 was not part of the ranges, I have to fix that
+        if (!(0 %in% sRanges))
+        {
+            cdf = c(# the deleterious part up to the value before 0
+                cdfDel[1:(length(cdfDel) - 1)], 
+                # the beneficial part 
+                cdfDel[length(cdfDel)] + cdfBen)
+        }
+    } else
+    {
+        # model D
+        cdf = rep(0, length(sRanges))
+        # extract the S_p values
+        sp = extractSP(values)
+        for (i in 1:length(sp))
+        {
+            pos = which(sRanges > sp[i])
+            cdf[pos] = cdf[pos] + values[paste("S_p", sp[i])]
+        }
+    }
+    dfe = cdf[2:length(cdf)] - cdf[1:(length(cdf) - 1)]
+    
+    # check it sums to almost 1
+    if (!isTRUE(all.equal(sum(dfe), 1)))
+    {
+        warning("Discretized DFE sums to ", sum(dfe), 
+                "\n\tDiscretized DFE has been rescaled to sum to 1.")
+    }
+    dfe = dfe / sum(dfe)
+    
+    names(dfe) = toNames(sRanges[2:(length(sRanges) - 1)])
+    return(dfe)
 }
 
 getModelName = function(estimates)
@@ -580,75 +622,94 @@ getModelName = function(estimates)
 	return(modelName)
 }
 
-getDivergenceExpectation = function(S, model, params)
+getDivergenceExpectation = function(S)
 {
-	# this is conditional on a given S
-	pos = which(S != 0)
-	expec = rep(1, length(S))
-	if (length(pos) > 0)
-	{
-		expec[pos] = S[pos] / (1 - exp(-S[pos]))
-	}
-	# multiply with the density
-	return(expec * getDensity(S, model, params))
+    # this is conditional on a given S
+    pos = which(S != 0)
+    expec = rep(1, length(S))
+    if (length(pos) > 0)
+    {
+        expec[pos] = S[pos] / (1 - exp(-S[pos]))
+    }
+    # when using my own numerical integration, I do not multiply with the density
+    return(expec)
 }
 
-getMisattributedPolyExpectation = function(S, model, params, n)
+getMisattributedPolyExpectation = function(S, n)
 {
-	# this is conditional on a given S
-	# need to perform the first integral over x
-	pos0 = which(S == 0)
-	if (length(pos0) != 0)
-	{
-		newS = S[-pos0]
-	} else
-	{
-		newS = S
-	}
-	if (length(newS) > 0)
-	{
-		aux = sapply(newS,
-						 function(oneS)
-						 {
-						 	integrate(function(x)
-						 	{
-						 		if (oneS < 0)
-						 		{
-						 			# if oneS is negative, 
-						 			# need to change a bit the operations
-						 			# to avoid numerical issues
-						 			# I essentially multiple with exp(S) 
-						 			# on both ends of fraction
-						 			res = (exp(oneS) - exp(oneS * x)) / 
-						 						((1 - x) * (exp(oneS) - 1))
-						 		} else
-						 		{
-						 			res = (1 - exp(-oneS * (1 - x))) / 
-						 						((1 - x) * (1 - exp(-oneS)))
-						 		}
-						 		return(x ^ (n - 1) * res)
-						 	},
-						 	# I can't deal with x=1, I get weird behaviour
-						 	# set the upper limit to almost 1
-						 	lower = 0,
-						 	upper = 1 - 1e-10)$value
-						 })
-	} else
-	{
-		aux = NULL
-	}
-	if (length(pos0) != 0)
-	{
-		# for S == 0, I just use the neutral
-		# re-instert it at the original position of 0
-		aux = append(aux, 1 / n, after = pos0 - 1)
-	}
-	# multiply with the density
-	return(aux * getDensity(S, model, params))
+    # this is conditional on a given S
+    # I replace the integral over x with the Taylor expansion
+    # just like in polyDFE
+    pos0 = which(S == 0)
+    if (length(pos0) != 0)
+    {
+        newS = S[-pos0]
+    } else
+    {
+        newS = S
+    }
+    pos = which(newS >= 0)
+    if (length(newS) > 0)
+    {
+        # try numerical integration
+        aux = sapply(newS,
+                     function(s)
+                         tryCatch(
+                             integrate(function(x)
+                                 x^(n - 1) * (1 - exp(-s * (1 - x))) / (1 - x),
+                                 0, 1)$value,
+                             warning = function(war)
+                             {
+                                 return(NA)
+                             },
+                             error = function(err)
+                             {
+                                 return(NA)
+                             }))
+        # for the positions where numerical integration failed
+        # I use the Taylor approximation
+        failed = which(is.na(aux))
+        if (length(failed) > 0)
+        {
+            # Taylor approximation
+            term = rep(1, length(newS[failed]))
+            aux[failed] = rep(1, length(newS[failed]))
+            for (k in 0:10)
+            {
+                term = term * (-newS[failed]) / (n + k)
+                aux[failed] = aux[failed] + term / (k + 1)
+            }
+            aux[failed] = - aux[failed]
+        }
+        if (length(pos) == 0)
+        {
+            aux = aux * exp(newS) / (exp(newS) - 1)
+        } else if (length(pos) == length(newS))
+        {
+            aux = aux / (1 - exp(-newS))
+        } else
+        {
+            aux[pos] = aux[pos] / (1 - exp(-newS[pos]))
+            aux[-pos] = aux[-pos] * exp(newS[-pos]) / (exp(newS[-pos]) - 1)    
+        }
+    } else
+    {
+        aux = NULL
+    }
+    if (length(pos0) != 0)
+    {
+        # for S == 0, I just use the neutral
+        # re-instert it at the original position of 0
+        aux = append(aux, 1 / n, after = pos0 - 1)
+    }
+    # when using my own numerical integration, I do not multiply with the density
+    return(aux)
 }
 
-hasPosSel = function(values, model)
+hasPosSel = function(est)
 {
+    model = est$model
+    values = est$values
 	if (model == 'A')
 	{
 		return(!(is.na(values['S_max'] || values['S_max'] == 0)))
@@ -666,195 +727,161 @@ hasPosSel = function(values, model)
 
 estimateAlpha = function(estimates, supLimit = 0, div = NULL, poly = TRUE)
 {
-	model = estimates$model
-	values = estimates$values
-	n = estimates$n
-	
-	if (poly && !is.null(model) && is.null(n))
-	{
-		stop("The sample size n needs to be provided when polymorphism is corrected for")
-	}
-	
-	# make sure I have p_b and S_b, they might be missing when not estimated
-	if (model != 'D')
-	{
-		if (!'p_b' %in% names(values))
-		{
-			values = c(values, 0, 0)
-			names(values) = c(names(values)[1:(length(values) - 2)], "p_b", "S_b")
-		}	
-	}
-	
-	# calculated the expected alpha from the estimated DFE
-	# it's dependent on the model
-	# for the integral giving the divergence expectations
-	if (model != 'D')
-	{
-		divDel = integrate(getDivergenceExpectation,
-								 lower = -Inf, upper = 0,
-								 model = model, params = values)$value
-		if (supLimit > 0)
-		{
-			divDel = divDel + integrate(getDivergenceExpectation,
-			                            lower = 0, upper = supLimit,
-			                            model = model, params = values)$value
-		}	
-	} else
-	{
-		# extract the S_p values
-		sp = extractSP(values)
-		params = values[grep('S_p', names(values))]
-		names(params) = sp
-		posSupLim = which(sp <= supLimit)
-		if (length(posSupLim) > 1)
-		{
-			posSupLim = posSupLim[length(posSupLim)]
-		} else
-		{
-			posSupLim = length(sp)
-		}
-		
-		# calculate the deletrious divergence
-		divDel = 0
-		for (i in 1:posSupLim)
-		{
-			divDel = divDel + getDivergenceExpectation(sp[i], model, values)
-		}
-	}
-	
-	if (is.null(div))
-	{
-		# the whole integral should be multiplied by lambda
-		# but it cancels out in the division at the end
-		# if no positive selection, return o
-		if (!hasPosSel(values, model))
-		{
-			return(0)
-		}
-		
-		# for models B and D, I do not have an integral
-		if (model != 'B' && model != 'D')
-		{
-			tail = Inf
-			# use the tail for integration for model C
-		  if (model == 'C')
-		  {
-		    tail = qexp(p = 0.99999999, rate = 1 / values['S_b'])
-		  }
-			if (tail < supLimit)
-			{
-			  divBen = 0
-			} else
-			{
-			  divBen = integrate(getDivergenceExpectation,
-			                     lower = supLimit,
-			                     upper = tail,
-			                     model = model, params = values )$value  
-			}
-		} else
-		{
-			if (model == 'B')
-			{
-				divBen = getDivergenceExpectation(values['S_b'], model, values)	
-			} else
-			{
-				divBen = 0
-				if (posSupLim < length(sp))
-				{
-					for (i in (posSupLim + 1):length(sp))
-					{
-						divBen = divBen + getDivergenceExpectation(sp[i], model, values)
-					}	
-				} else
-				{
-					return(0)
-				}
-			}
-		}
-		
-		return(divBen / (divDel + divBen))
-	}
-	
-	# if I have divergence data,
-	# I calcualte alpha according to observed divergence counts
-	# if poly=T - I account for the misattributed polymorphism
-	# for this, I need to have theta and r_n
-	if (poly)
-	{
-		# n needs to be provided - I cannot reliably extract it from the r info
-		# since things might be groupped
-		# if lambda was not estimated, I do not have r_n, so just set it to 1
-		if (!"lambda" %in% names(values))
-		{
-			r_n = 1
-		} else
-		{
-			# figure out what is my biggest r
-			pos = grep("r ", names(values), fixed = T)
-			r_n = values[pos[length(pos)]]
-		}
-		
-		# get the misattributed neutral polymorphism
-		fake_div_neut = div["length_neut"] * values["theta_bar"] * r_n / n
-		# get the misattributed selected polymorphism
-		if (model != 'D')
-		{
-			fake_div_sel = integrate(getMisattributedPolyExpectation,
-											 lower = -Inf, upper = 0,
-											 model = model, params = values, n = n)$value	
-			
-			# sometimes I can get error in integration due to "probably divergent"
-			# if so, need to change limit
-			# use the tail of the exponenetial distribution
-			aux = tryCatch(integrate(getMisattributedPolyExpectation,
-											 lower = 0, upper = Inf,
-											 model = model, params = values, n = n)$value,
-								error = function(e) NULL)
-			if (is.null(aux))
-			{
-				# use the tail of the exponential distribution
-				aux = tryCatch(integrate(getMisattributedPolyExpectation,
-												 lower = 0,
-												 upper = qexp(p = 0.9999, rate = 1 / values['S_b']),
-												 model = model, params = values, n = n)$value,
-									error = function(e) NULL)
-				# if still error, then I can't do much about it
-				if (is.null(aux))
-				{
-					# throw out the original error
-					aux = integrate(getMisattributedPolyExpectation,
-										 lower = 0, upper = Inf,
-										 model = model, params = values, n = n)$value
-				}
-			}
-			
-			
-			fake_div_sel = fake_div_sel + aux
-		} else
-		{
-			fake_div_sel = 0
-			for (i in 1:length(sp))
-			{
-				fake_div_sel = fake_div_sel + 
-										getMisattributedPolyExpectation(sp[i], model, 
-																				  values, n)
-			}
-		}
-		
-		fake_div_sel = div["length_sel"] * values["theta_bar"] * r_n * fake_div_sel
-		div["obs_neut"] = div["obs_neut"] - fake_div_neut
-		div["obs_sel"] = div["obs_sel"] - fake_div_sel
-	}
-	
-	return(as.numeric((div["obs_sel"] -
-						  	divDel * div["obs_neut"] 
-						  			 * div["length_sel"] / div["length_neut"]
-							 ) / div["obs_sel"]))
+    # if the list doesn't contain model
+    # but it's entry does
+    # throw an error
+    if (!("model" %in% names(estimates)) && ("model" %in% names(estimates[[1]])))
+    {
+        stop("estimates should contain just one entry ",
+             "from the list returned by parseOutput")
+        return(NULL)
+    }
+    
+    model = estimates$model
+    values = estimates$values
+    n = estimates$n
+    
+    # make sure supLimit is >= 0
+    if (supLimit < 0)
+    {
+        warning("supLimit cannot be negative, setting it to 0")
+        supLimit = 0
+    }
+    
+    # I need to use the critical values for a better integration
+    quantiles = getQuantiles(estimates)
+    
+    # make sure I have p_b and S_b, they might be missing when not estimated
+    if (model != 'D')
+    {
+        if (!'p_b' %in% names(values))
+        {
+            values = c(values, 0, 0)
+            names(values) = c(names(values)[1:(length(values) - 2)], 
+                              "p_b", "S_b")
+        }	
+    }
+    
+    # calculate the expected alpha from the estimated DFE
+    # it's dependent on the model
+    # for the integral giving the divergence expectations
+    if (model != 'D')
+    {
+        divDel = altIntegrate(getDivergenceExpectation,
+                              -Inf, supLimit, quantiles)
+    } else
+    {
+        # extract the S_p values
+        sp = extractSP(values)
+        posSupLim = which(sp <= supLimit)
+        if (length(posSupLim) > 1)
+        {
+            posSupLim = posSupLim[length(posSupLim)]
+        } else
+        {
+            posSupLim = length(sp)
+        }
+        # calculate the deletrious divergence
+        divDel = 0
+        for (i in 1:posSupLim)
+        {
+            divDel = (divDel 
+                      + getDivergenceExpectation(sp[i]) 
+                      * values[paste("S_p", sp[i])])
+        }
+    }
+    
+    if (is.null(div))
+    {
+        # the whole integral should be multiplied by lambda
+        # but it cancels out in the division at the end
+        # if no positive selection, return o
+        if (!hasPosSel(estimates))
+        {
+            return(0)
+        }
+        
+        # for models B and D, I do not have an integral
+        if (model != 'B' && model != 'D')
+        {
+            divBen = altIntegrate(getDivergenceExpectation,
+                                  supLimit, Inf, quantiles) 
+        } else
+        {
+            if (model == 'B')
+            {
+                divBen = getDivergenceExpectation(values['S_b']) * values["p_b"]	
+            } else
+            {
+                divBen = 0
+                if (posSupLim < length(sp))
+                {
+                    for (i in (posSupLim + 1):length(sp))
+                    {
+                        divBen = (divBen + getDivergenceExpectation(sp[i]) 
+                                  * values[paste("S_p", sp[i])])
+                    }	
+                } else
+                {
+                    return(0)
+                }
+            }
+        }
+        
+        return(divBen / (divDel + divBen))
+    }
+    
+    # if I have divergence data,
+    # I calcualte alpha according to observed divergence counts
+    # if poly = T, I account for the misattributed polymorphism
+    # for this, I need to have theta and r_n
+    if (poly)
+    {
+        # if lambda was not estimated, I do not have r_n, so just set it to 1
+        if (!"lambda" %in% names(values))
+        {
+            r_n = 1
+        } else
+        {
+            # figure out what is my biggest r
+            pos = grep("r ", names(values), fixed = T)
+            r_n = values[pos[length(pos)]]
+        }
+        
+        # get the misattributed neutral polymorphism
+        fake_div_neut = div["length_neut"] * values["theta_bar"] * r_n / n
+        # get the misattributed selected polymorphism
+        if (model != 'D')
+        {
+            fake_div_sel = altIntegrate(getMisattributedPolyExpectation,
+                                        -Inf, Inf, quantiles, n)
+        } else
+        {
+            fake_div_sel = 0
+            for (i in 1:length(sp))
+            {
+                fake_div_sel = (fake_div_sel 
+                                + getMisattributedPolyExpectation(sp[i], n) 
+                                * values[paste("S_p", sp[i])])
+            }
+        }
+        
+        fake_div_sel = div["length_sel"] * values["theta_bar"] * r_n * fake_div_sel
+        
+        div["obs_neut"] = div["obs_neut"] - fake_div_neut
+        div["obs_sel"] = div["obs_sel"] - fake_div_sel
+    }
+    alpha = as.numeric(1 - 
+                       ((div["length_sel"] / div["length_neut"])
+                        * (div["obs_neut"] / div["obs_sel"])
+                        * divDel))
+    
+    return(alpha)
 }
 
-getAIC = function(estimate)
+getAIC = function(estimates)
 {
-	return(2 * length(estimate$estimated) - 2 * estimate$lk)
+	return(2 * length(estimates$estimated) - 2 * estimates$lk)
 }
 
 compareModels = function(est1, est2 = NULL, nested = NULL)
@@ -941,21 +968,24 @@ compareModels = function(est1, est2 = NULL, nested = NULL)
 		# calculate LRT
 		# skip estimates where the number of parameters is the same
 		# these cannot possibly be nested
-		if (isTRUE(nested) || (nest && is.null(nested)))
+		if (est1[[i]]$input != est2[[i]]$input)
 		{
-			# the D statistic is positive
-			# if I don't care which is the bigger model,
-			# I just take the absolute value
-			D = 2 * abs(est1[[i]]$lk - est2[[i]]$lk)
-			# D should follow a chi-square distribution
-			# with degrees of freedom given by the number of extra parameters
-			# estimated in the larger model
-			df = abs(length(est1[[i]]$estimated) - length(est2[[i]]$estimated))
-			lrt = rbind(lrt, 
-							c(df, est1[[i]]$lk, est2[[i]]$lk, 
-							  pchisq(D, df, lower.tail = FALSE)))
-		}
-		else
+		    warning("Input files are different for run", i)
+		    lrt = rbind(lrt, c(NA, est1[[i]]$lk, est2[[i]]$lk, NA))
+		} else if (isTRUE(nested) || (nest && is.null(nested)))
+		{
+		    # the D statistic is positive
+		    # if I don't care which is the bigger model,
+		    # I just take the absolute value
+		    D = 2 * abs(est1[[i]]$lk - est2[[i]]$lk)
+		    # D should follow a chi-square distribution
+		    # with degrees of freedom given by the number of extra parameters
+		    # estimated in the larger model
+		    df = abs(length(est1[[i]]$estimated) - length(est2[[i]]$estimated))
+		    lrt = rbind(lrt, 
+		                c(df, est1[[i]]$lk, est2[[i]]$lk, 
+		                  pchisq(D, df, lower.tail = FALSE)))
+		} else
 		{
 			lrt = rbind(lrt, c(NA, est1[[i]]$lk, est2[[i]]$lk, NA))
 		}

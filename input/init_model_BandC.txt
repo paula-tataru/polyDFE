@@ -6,7 +6,7 @@
 
 # deleterious DFE only can be specified by fixing p_b and S_b to 0
 #ID   eps an    eps cont  lambda    theta bar  a     S d      b      p b       S b      r (at least #groups-1 of them)
-2     0 0.00    1 0.00    0 0.005   0 0.001    0 2   0 -400   0 14   1 0       1 0      0  1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 
+2     1 0.00    1 0.00    0 0.005   0 0.001    0 2   0 -400   0 14   1 0       1 0      0  1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 
 
 # no mutation variability
 #ID   eps an    eps cont  lambda    theta bar  a      S d      b      p b      S b      r (at least #groups-1 of them)
@@ -15,3 +15,7 @@
 # no nuisance parameters
 #ID   eps an    eps cont  lambda    theta bar  a      S d      b      p b      S b      r (at least #groups-1 of them)
 4     1 0.00    1 0.00    0 0.005   0 0.001    0 2    0 -400   0 0.4  0 0.02   0 4      1  1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 
+
+# allow for ancestral error
+#ID   eps an    eps cont  lambda    theta bar  a      S d      b      p b      S b      r (at least #groups-1 of them)
+10    0 0.05    1 0.00    0 0.005   0 0.001    0 2    0 -400   0 0.4  0 0.02   0 4      1  1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 

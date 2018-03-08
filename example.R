@@ -37,7 +37,7 @@ print(est[[1]])
 # given by the user with -i
 est_1 = parseOutput("output/example_2_init_C")
 est_2 = parseOutput("output/example_2_init_C", init = TRUE)
-cat(est_1[[1]]$lk, "\t", est_1[[1]]$grad, "\t", est_1[[1]]$values["S_d"], "\n")
+cat(est_1[[1]]$lk, "\t", est_1[[1]]$grad, "\t\t", est_1[[1]]$values["S_d"], "\n")
 cat(est_2[[1]]$lk, "\t", est_2[[1]]$grad, "\t", est_2[[1]]$values["S_d"], "\n")
 
 # multiple runs of polyDFE can be stored in the same list
@@ -101,10 +101,13 @@ print(estimateAlpha(est[[6]], div = div, supLimit = 5))
 print(estimateAlpha(est[[6]], div = div, poly = FALSE))
 print(estimateAlpha(est[[6]], div = div, poly = FALSE, supLimit = 5))
 # calculate alpha for all runs of polyDFE found in est
-# alpha_dfe
-print(sapply(est, estimateAlpha))
-# alpha_div
-print(sapply(est, estimateAlpha, div = div))
+# and compare with the values returned from polyDFE
+alpha = sapply(est, function(e) c("polyDFE alpha_dfe" = unname(e$alpha["alpha_dfe"]), 
+                                  "R alpha_dfe" = estimateAlpha(e),
+                                  "polyDFE alpha_div" = unname(e$alpha["alpha_div"]), 
+                                  "R alpha_div" = estimateAlpha(e, div = div)))
+colnames(alpha) = basename(polyDFEfiles)
+print(alpha)
 
 ########################### 
 # model testing

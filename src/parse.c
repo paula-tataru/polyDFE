@@ -666,7 +666,7 @@ int parse(int what, char *filename, int id, void *pv)
         case 0:
         {
             // range
-            // non selection part: id, k, r, ranges
+            // non selection part
             no_params = 1 + 1 + 2 * 5 + 2;
             // selection part
             no_params += no_sel_params(((ParamsModel *) pv)->model, 2.0/3);
@@ -675,7 +675,7 @@ int parse(int what, char *filename, int id, void *pv)
         case 1:
         {
             // init
-            // non selection part: id, k, ranges
+            // non selection part
             no_params = 1 + 2 * 5 + ((ParamsModel *) pv)->no_groups;
             // selection part
             no_params += no_sel_params(((ParamsModel *) pv)->model,
@@ -703,13 +703,13 @@ int parse(int what, char *filename, int id, void *pv)
         }
         case 4:
         {
-            // this is used to be for cubature
+            // this used to be for cubature
             break;
         }
         case 5:
         {
             // init for simulation
-            // non selection part: id, k, ranges
+            // non selection part
             no_params = 1 + 2 * 5 + ((ParamsModel *) pv)->no_groups;
             // selection part
             no_params += no_sel_params(((ParamsModel *) pv)->model,
@@ -742,7 +742,7 @@ int parse(int what, char *filename, int id, void *pv)
     while ((pp = getline(&buf, &buf_len, file_in)) != -1)
     {
         line_cnt++;
-        // ignore empty line and line beginning with '#'
+        // ignore empty lines and lines beginning with '#'
         if (pp <= 1 || buf[0] == '#')
         {
             continue;
