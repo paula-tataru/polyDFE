@@ -46,7 +46,6 @@ typedef struct params_optim_s ParamsOptim;
 
 void initialize_params_optim(ParamsOptim *po);
 
-void print_with_space(char **s, double x, FILE *f);
 void print_hearder_solution_neut(ParamsModel pm, int with_fixed, FILE *f);
 void print_hearder_solution_demo(ParamsModel pm, int with_fixed, FILE *f);
 void print_hearder_solution_sel(ParamsModel pm, int with_fixed, FILE *f);

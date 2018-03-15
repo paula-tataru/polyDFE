@@ -99,6 +99,9 @@ struct params_model_s
     int sel;
     int i; // this keeps track of which sel SFS I integrate over
 
+    int neut_ln; // do I optimize neutral likelihood?
+    int sel_ln;  // do I optimize selected likelihood?
+
     gsl_integration_workspace *w;
     gsl_integration_workspace *w_div;
 
@@ -130,6 +133,12 @@ struct params_s
     double lnL_sel;
 
     double grad;    ///< gradient of the best solution
+
+    // kind of likelihood to optimize
+    // 0: neutral, selected
+    // 1: neutral, selected, joint
+    // 2: joint
+    int kind;
 
     int verbose;
 
@@ -165,7 +174,9 @@ void set_neut_expec(ParamsModel pm, double **expec_neut);
 void set_anc_expec(double eps_an, int n, double **expec);
 
 void set_sel_lnL(Params *p);
+double get_sel_lnL(const gsl_vector *x, void *pv);
 void set_neut_lnL(Params *p);
+double get_neut_lnL(const gsl_vector *x, void *pv);
 double get_lnL(const gsl_vector *x, void *pv);
 
 #endif

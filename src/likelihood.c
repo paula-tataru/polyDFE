@@ -182,6 +182,9 @@ void initialize_params_model(ParamsModel *pm)
     pm->neut = 0;
     pm->sel = 0;
 
+    pm->neut_ln = FALSE;
+    pm->sel_ln = FALSE;
+
     pm->k = 0.01;
 
     pm->w = NULL;
@@ -200,7 +203,11 @@ void initialize_params(Params *p)
     p->verbose = 0;
 
     p->lnL = DBL_MAX;
+    p->lnL_neut = DBL_MAX;
+    p->lnL_sel = DBL_MAX;
     p->grad = DBL_MAX;
+    
+    p->kind = 2;
 
     p->counter = 0;
     p->max_counter = 5000;
@@ -1203,6 +1210,7 @@ void set_sel_lnL(Params *p)
 {
     int status = EXIT_SUCCESS;
 
+    // calculate expectations
     status = set_sel_expec(p->pm, &p->expec_sel, FALSE);
     if (status == EXIT_FAILURE)
     {
@@ -1216,17 +1224,7 @@ void set_sel_lnL(Params *p)
     }
 }
 
-void set_neut_lnL(Params *p)
-{
-    // calculate expectations
-    // it relies on having already calculated the selected expectations
-    set_neut_expec(*p->pm, &p->expec_neut);
-    // add ancestral error
-    set_anc_expec(p->pm->eps_an, p->pm->n, &p->expec_neut);
-    p->lnL_neut = get_lnL_aux(p, p->no_neut, p->counts_neut, p->expec_neut);
-}
-
-double get_lnL(const gsl_vector *x, void *pv)
+double get_sel_lnL(const gsl_vector *x, void *pv)
 {
     Params *p = (Params *) pv;
 
@@ -1255,13 +1253,57 @@ double get_lnL(const gsl_vector *x, void *pv)
     }
 
     set_sel_lnL(p);
-    if (gsl_isnan(p->lnL_sel) == 1)
+
+    return ( - p->lnL_sel);
+}
+
+void set_neut_lnL(Params *p)
+{
+    // calculate expectations
+    // it relies on having already calculated the selected expectations
+    set_neut_expec(*p->pm, &p->expec_neut);
+    // add ancestral error
+    set_anc_expec(p->pm->eps_an, p->pm->n, &p->expec_neut);
+    p->lnL_neut = get_lnL_aux(p, p->no_neut, p->counts_neut, p->expec_neut);
+}
+
+double get_neut_lnL(const gsl_vector *x, void *pv)
+{
+    Params *p = (Params *) pv;
+
+    // check the counter
+    if (p->counter >= p->max_counter)
     {
-        // return (GSL_NAN);
+        // reached maximum number of allowed likelihood evaluations
+        // per optimization iteration
+        // so GSL might be stuck - force it to stop by returning Inf
         return (DBL_MAX);
     }
 
+    // update counter
+    p->counter++;
+
+    // update the content of p from x
+    undo_transform(p->pm, x);
+
     set_neut_lnL(p);
 
-    return (-(p->lnL_neut + p->lnL_sel));
+    return (- p->lnL_neut);
+}
+
+double get_lnL(const gsl_vector *x, void *pv)
+{
+    double ln = 0;
+    Params *p = (Params *) pv;
+
+    if (p->pm->neut_ln == TRUE)
+    {
+        ln += get_neut_lnL(x, pv);
+    }
+    if (p->pm->sel_ln == TRUE)
+    {
+        ln += get_sel_lnL(x, pv);
+    }
+
+    return (ln);
 }

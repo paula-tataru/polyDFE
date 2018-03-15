@@ -95,7 +95,7 @@ extractInfo = function(lines, init = FALSE)
     filename = strsplit(lines[pos], split = ' ')[[1]][5]
     
     # find out which are the estimated parameters
-    # the info is in the line following -- Starting local optimization
+    # the info is after -- Starting local optimization
     pos = findPos('-- Starting local optimization', lines)[1] + 1
     
     if (is.na(pos))
@@ -114,10 +114,50 @@ extractInfo = function(lines, init = FALSE)
     } else
     {
         # figure out what parameters have been estimated
-        estimated = splitBySpace(lines[pos])
-        # the first and last 4 contain
-        # iteration number, ln lk, gradient and status
-        estimated = estimated[2:(length(estimated) - 4)]
+        # for that, I need to see what kind of likelihood optimziation I had
+        # did I do joint opitmization? All info is there
+        posJoint = findPos('-- Optimizing all parameters', lines)[1] + 1
+        posNeut = NA
+        posSel = NA
+        if (is.na(posJoint))
+        {
+            # I only had separate optimizations
+            estimatedNeut = numeric()
+            estimatedSel = numeric()
+            posNeut = findPos('-- Optimizing neutral parameters', lines)[1] + 1
+            if (!is.na(posNeut))
+            {
+                estimatedNeut = splitBySpace(lines[posNeut])
+                # the first and last 4 contain
+                # iteration number, ln lk, gradient and status
+                estimatedNeut = estimatedNeut[2:(length(estimatedNeut) - 4)]        
+            }
+            posSel = findPos('-- Optimizing selected parameters', lines)[1] + 1
+            if (!is.na(posSel))
+            {
+                estimatedSel = splitBySpace(lines[posSel])
+                # the first and last 4 contain
+                # iteration number, ln lk, gradient and status
+                estimatedSel = estimatedSel[2:(length(estimatedSel) - 4)]        
+            }
+            estimated = c(estimatedNeut, estimatedSel)
+        } 
+        # if all are na, this is output from polyDFE v1.0
+        if (all(is.na(c(posJoint, posNeut, posSel)))
+            || !is.na(posJoint))
+        {
+            if (!is.na(posJoint))
+            {
+                estimated = splitBySpace(lines[posJoint])    
+            } else
+            {
+                estimated = splitBySpace(lines[pos])
+            }
+            
+            # the first and last 4 contain
+            # iteration number, ln lk, gradient and status
+            estimated = estimated[2:(length(estimated) - 4)]
+        }
         
         # find out what is the best likelihood found
         # what model I used
@@ -158,30 +198,104 @@ extractInfo = function(lines, init = FALSE)
         # move on to starting the optimization
         # using the initial values is always the first one
         pos = findPos('-- Starting local optimization', lines)[1] + 1
+        posJoint = findPos('-- Optimizing all parameters', lines)[1] + 1
+        posNeut = findPos('-- Optimizing neutral parameters', lines)[1] + 1
+        posSel = findPos('-- Optimizing selected parameters', lines)[1] + 1
         if (!is.na(pos))
         {
-            # find the last line of the output
-            # it has to end with a line that starts with --
-            end = findPos('--', lines)
-            end = end[which(end > pos)][1]
-            # find the last line that had only numbers
-            for (i in end:pos)
+            if (is.na(posJoint))
             {
-                aux = strsplit(lines[i], split = ' ')[[1]]
-                # get rid of empty entries
-                aux = removeEmpty(aux)
-                aux = tryCatch(as.numeric(aux),
-                               warning = function(w) return(w))
-                if (typeof(aux) != "list")
+                # I only had seperate optimizations
+                if (!is.na(posNeut))
                 {
-                    # valid conversion, get results
-                    # the first and last 3 contain
-                    # iteration number, lnlk, gradient and status
-                    values[estimated] = aux[2:(length(aux) - 3)]
-                    # update likelihood and gradient
-                    lk = as.numeric(aux[length(aux) - 2])
-                    grad = as.numeric(aux[length(aux) - 1])
-                    break
+                    # find the last line of the output
+                    # it has to end with a line that starts with --
+                    end = findPos('--', lines)
+                    end = end[which(end > posNeut)][1]
+                    # find the last line that had only numbers
+                    for (i in end:posNeut)
+                    {
+                        aux = strsplit(lines[i], split = ' ')[[1]]
+                        # get rid of empty entries
+                        aux = removeEmpty(aux)
+                        aux = tryCatch(as.numeric(aux),
+                                       warning = function(w) return(w))
+                        if (typeof(aux) != "list")
+                        {
+                            # valid conversion, get results
+                            # the first and last 3 contain
+                            # iteration number, lnlk, gradient and status
+                            values[estimatedNeut] = aux[2:(length(aux) - 3)]
+                            break
+                        }
+                    }
+                }
+                if (!is.na(posSel))
+                {
+                    # find the last line of the output
+                    # it has to end with a line that starts with --
+                    end = findPos('--', lines)
+                    end = end[which(end > posSel)][1]
+                    # find the last line that had only numbers
+                    for (i in end:posSel)
+                    {
+                        aux = strsplit(lines[i], split = ' ')[[1]]
+                        # get rid of empty entries
+                        aux = removeEmpty(aux)
+                        aux = tryCatch(as.numeric(aux),
+                                       warning = function(w) return(w))
+                        if (typeof(aux) != "list")
+                        {
+                            # valid conversion, get results
+                            # the first and last 3 contain
+                            # iteration number, lnlk, gradient and status
+                            values[estimatedSel] = aux[2:(length(aux) - 3)]
+                            break
+                        }
+                    }
+                }
+                # I have to figure out likelihood and gradient
+                posLk = findPos("-- Joint likelihood", lines)[1]
+                lk = strsplit(lines[posLk], split = ' ')[[1]]
+                # remove empty entries
+                lk = lk[which(unlist(lapply(lk, nchar)) > 0, arr.ind = TRUE)]
+                grad = as.numeric(lk[7])
+                lk = as.numeric(lk[4])
+            }
+            
+            # if all are na, this is output from polyDFE v1.0
+            if (all(is.na(c(posJoint, posNeut, posSel)))
+                || !is.na(posJoint))
+            {
+                # find the last line of the output
+                # it has to end with a line that starts with --
+                end = findPos('--', lines)
+                if (!is.na(posJoint))
+                {
+                    end = end[which(end > posJoint)][1]
+                } else
+                {
+                    end = end[which(end > pos)][1]
+                }
+                # find the last line that had only numbers
+                for (i in end:pos)
+                {
+                    aux = strsplit(lines[i], split = ' ')[[1]]
+                    # get rid of empty entries
+                    aux = removeEmpty(aux)
+                    aux = tryCatch(as.numeric(aux),
+                                   warning = function(w) return(w))
+                    if (typeof(aux) != "list")
+                    {
+                        # valid conversion, get results
+                        # the first and last 3 contain
+                        # iteration number, lnlk, gradient and status
+                        values[estimated] = aux[2:(length(aux) - 3)]
+                        # update likelihood and gradient
+                        lk = as.numeric(aux[length(aux) - 2])
+                        grad = as.numeric(aux[length(aux) - 1])
+                        break
+                    }
                 }
             }
         } 
@@ -269,6 +383,10 @@ extractInfo = function(lines, init = FALSE)
         alpha = c(alpha, as.numeric(aux[2]))
         names(alpha)[length(alpha)] = strsplit(aux[1], split = "---- ")[[1]][2]
     }
+    
+    # make sure the estimated parameters
+    # are in the same order as in the names of values
+    estimated = estimated[order(match(estimated , names(values)))]
     
     return(
         list(
