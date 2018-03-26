@@ -1,5 +1,5 @@
 /*
- * polyDFE v1.0: predicting DFE and alpha from polymorphism data
+ * polyDFE v1.11: predicting DFE and alpha from polymorphism data
  * Copyright (c) 2018  Paula Tataru and Marco A.P. Franco
  *
  * This program is free software: you can redistribute it and/or modify
@@ -46,7 +46,6 @@ typedef struct params_optim_s ParamsOptim;
 
 void initialize_params_optim(ParamsOptim *po);
 
-void print_with_space(char **s, double x, FILE *f);
 void print_hearder_solution_neut(ParamsModel pm, int with_fixed, FILE *f);
 void print_hearder_solution_demo(ParamsModel pm, int with_fixed, FILE *f);
 void print_hearder_solution_sel(ParamsModel pm, int with_fixed, FILE *f);

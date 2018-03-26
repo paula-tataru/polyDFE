@@ -1,5 +1,5 @@
 /*
- * polyDFE v1.0: predicting DFE and alpha from polymorphism data
+ * polyDFE v1.11: predicting DFE and alpha from polymorphism data
  * Copyright (c) 2018  Paula Tataru and Marco A.P. Franco
  *
  * This program is free software: you can redistribute it and/or modify
@@ -60,19 +60,19 @@ void print_hearder_solution_neut(ParamsModel pm, int with_fixed, FILE *f)
 {
     if (pm.eps_an_flag == TRUE || with_fixed == TRUE)
     {
-        fprintf(f, "     eps_an   ");
+        fprintf(f, "%10.10s ", "eps_an");
     }
     if ((pm.lambda_flag == TRUE || with_fixed == TRUE) && pm.div_flag == TRUE)
     {
-        fprintf(f, "     lambda   ");
+        fprintf(f, "%10.10s ", "lambda");
     }
     if (pm.theta_bar_flag == TRUE || with_fixed == TRUE)
     {
-        fprintf(f, "     theta_bar");
+        fprintf(f, "%10.10s ", "theta_bar");
     }
     if (pm.a_flag == TRUE || with_fixed == TRUE)
     {
-        fprintf(f, "     a        ");
+        fprintf(f, "%10.10s ", "a");
     }
 }
 
@@ -83,7 +83,7 @@ void print_hearder_solution_demo(ParamsModel pm, int with_fixed, FILE *f)
     {
         for (i = 1; i < pm.no_groups; i++)
         {
-            fprintf(f, "     r%3d     ", i + 1);
+            fprintf(f, "%7s%3d ", "r", i + 1);
         }
     }
 }
@@ -98,15 +98,15 @@ void print_hearder_solution_sel(ParamsModel pm, int with_fixed, FILE *f)
         {
             if (pm.sel_flag[0] == TRUE || with_fixed == TRUE)
             {
-                fprintf(f, "      S_bar     ");
+                fprintf(f, "%10.10s ", "S_bar");
             }
             if (pm.sel_flag[1] == TRUE || with_fixed == TRUE)
             {
-                fprintf(f, "     b        ");
+                fprintf(f, "%10.10s ", "b");
             }
             if (pm.sel_flag[2] == TRUE || with_fixed == TRUE)
             {
-                fprintf(f, "     S_max    ");
+                fprintf(f, "%10.10s ", "S_max");
             }
             break;
         }
@@ -114,19 +114,19 @@ void print_hearder_solution_sel(ParamsModel pm, int with_fixed, FILE *f)
         {
             if (pm.sel_flag[0] == TRUE || with_fixed == TRUE)
             {
-                fprintf(f, "      S_d       ");
+                fprintf(f, "%10.10s ", "S_d");
             }
             if (pm.sel_flag[1] == TRUE || with_fixed == TRUE)
             {
-                fprintf(f, "     b        ");
+                fprintf(f, "%10.10s ", "b");
             }
             if (pm.sel_flag[2] == TRUE || with_fixed == TRUE)
             {
-                fprintf(f, "     p_b      ");
+                fprintf(f, "%10.10s ", "p_b");
             }
             if (pm.sel_flag[3] == TRUE || with_fixed == TRUE)
             {
-                fprintf(f, "     S_b      ");
+                fprintf(f, "%10.10s ", "S_b");
             }
             break;
         }
@@ -134,19 +134,19 @@ void print_hearder_solution_sel(ParamsModel pm, int with_fixed, FILE *f)
         {
             if (pm.sel_flag[0] == TRUE || with_fixed == TRUE)
             {
-                fprintf(f, "      S_d       ");
+                fprintf(f, "%10.10s ", "S_d");
             }
             if (pm.sel_flag[1] == TRUE || with_fixed == TRUE)
             {
-                fprintf(f, "     b        ");
+                fprintf(f, "%10.10s ", "b");
             }
             if (pm.sel_flag[2] == TRUE || with_fixed == TRUE)
             {
-                fprintf(f, "     p_b      ");
+                fprintf(f, "%10.10s ", "p_b");
             }
             if (pm.sel_flag[3] == TRUE || with_fixed == TRUE)
             {
-                fprintf(f, "     S_b      ");
+                fprintf(f, "%10.10s ", "S_b");
             }
             break;
         }
@@ -158,11 +158,11 @@ void print_hearder_solution_sel(ParamsModel pm, int with_fixed, FILE *f)
                 {
                     if ((int) pm.sel_params[2*i] == pm.sel_params[2*i])
                     {
-                        fprintf(f, "     S_p%4d  ", (int) pm.sel_params[2*i]);
+                        fprintf(f, "%6s%4d ", "S_p", (int) pm.sel_params[2*i]);
                     }
                     else
                     {
-                        fprintf(f, "     S_p%2.2g", pm.sel_params[2*i]);
+                        fprintf(f, "%6s%2.2g ", "S_p", pm.sel_params[2*i]);
                     }
                 }
             }
@@ -173,53 +173,51 @@ void print_hearder_solution_sel(ParamsModel pm, int with_fixed, FILE *f)
 
 void print_hearder_solution(ParamsModel pm, int with_fixed)
 {
-    print_hearder_solution_neut(pm, with_fixed, stdout);
-    print_hearder_solution_sel(pm, with_fixed, stdout);
-    print_hearder_solution_demo(pm, with_fixed, stdout);
+    if (pm.neut_ln == TRUE)
+    {
+        print_hearder_solution_neut(pm, with_fixed, stdout);
+    }
+    if (pm.sel_ln == TRUE)
+    {
+            print_hearder_solution_sel(pm, with_fixed, stdout);
+    }
+    if (pm.neut_ln == TRUE)
+    {
+        print_hearder_solution_demo(pm, with_fixed, stdout);
+    }
 }
 
 void print_header_result(ParamsModel pm, int with_fixed)
 {
-    printf(" it  ");
+    printf("%4s ", "it");
     print_hearder_solution(pm, with_fixed);
-    printf("    ln lk             grad     status\n");
+    printf("%15.15s %10.10s %4s \n",  "ln lk", "grad", "status");
 }
 
-void print_with_space(char **s, double x, FILE *f)
+void print_with_space(char **s, double x, FILE *f, int small)
 {
-    char *aux;
-
-    if (x < 10 && x > -10)
+    if ((int) x == x)
     {
-        aux = "     ";
-    }
-    else if (x < 100 && x > -100)
-    {
-        aux = "    ";
-    }
-    else if (x < 1000 && x > -1000)
-    {
-        aux = "   ";
-    }
-    else if (x < 10000 && x > -10000)
-    {
-        aux = "  ";
+        sprintf((*s), "%d", (int) x);
     }
     else
     {
-        aux = " ";
+        sprintf((*s), "%10.10f", x);
     }
 
-    if (x >= 0.00001 || -x >= 0.00001)
+    if (small == TRUE)
     {
-        sprintf((*s), "%s%.5f", aux, x);
-    } else
-    {
-        aux = "    ";
-        sprintf((*s), "%s%.2e", aux, x);
+        fprintf(f, "%4s ", *s);
     }
-
-    fprintf(f, "%s  ", *s);
+    else if (small == FALSE)
+    {
+        fprintf(f, "%10.10s ", *s);
+    }
+    else
+    {
+        // large space for likelihood
+        fprintf(f, "%15.15s ", *s);
+    }
 }
 
 void print_solution_neut(ParamsModel pm, int with_fixed, gsl_vector *x, char *s,
@@ -232,19 +230,19 @@ void print_solution_neut(ParamsModel pm, int with_fixed, gsl_vector *x, char *s,
 
     if (pm.eps_an_flag == TRUE || with_fixed == TRUE)
     {
-        print_with_space(&s, pm.eps_an, f);
+        print_with_space(&s, pm.eps_an, f, FALSE);
     }
     if ((pm.lambda_flag == TRUE || with_fixed == TRUE) && pm.div_flag == TRUE)
     {
-        print_with_space(&s, pm.lambda, f);
+        print_with_space(&s, pm.lambda, f, FALSE);
     }
     if (pm.theta_bar_flag == TRUE || with_fixed == TRUE)
     {
-        print_with_space(&s, pm.theta_bar, f);
+        print_with_space(&s, pm.theta_bar, f, FALSE);
     }
     if (pm.a_flag == TRUE || with_fixed == TRUE)
     {
-        print_with_space(&s, pm.a, f);
+        print_with_space(&s, pm.a, f, FALSE);
     }
 }
 
@@ -262,7 +260,7 @@ void print_solution_demo(ParamsModel pm, int with_fixed, gsl_vector *x, char *s,
         // r[0] should always be 1
         for (i = 1; i < pm.no_groups; i++)
         {
-            print_with_space(&s, pm.r[i], f);
+            print_with_space(&s, pm.r[i], f, FALSE);
         }
     }
 }
@@ -282,7 +280,7 @@ void print_solution_sel(ParamsModel pm, int with_fixed, gsl_vector *x, char *s,
         {
             if (pm.sel_flag[i] == TRUE || with_fixed == TRUE)
             {
-                print_with_space(&s, pm.sel_params[i], f);
+                print_with_space(&s, pm.sel_params[i], f, FALSE);
             }
         }
     }
@@ -292,7 +290,7 @@ void print_solution_sel(ParamsModel pm, int with_fixed, gsl_vector *x, char *s,
         {
             if (pm.sel_flag[2*i+1] != FALSE || with_fixed == TRUE)
             {
-                print_with_space(&s, pm.sel_params[2*i+1], f);
+                print_with_space(&s, pm.sel_params[2*i+1], f, FALSE);
             }
         }
     }
@@ -300,36 +298,46 @@ void print_solution_sel(ParamsModel pm, int with_fixed, gsl_vector *x, char *s,
 
 void print_solution(ParamsModel pm, int with_fixed, gsl_vector *x, char *s)
 {
-    print_solution_neut(pm, with_fixed, x, s, stdout);
-    print_solution_sel(pm, with_fixed, x, s, stdout);
-    print_solution_demo(pm, with_fixed, x, s, stdout);
+    if (pm.neut_ln == TRUE)
+    {
+            print_solution_neut(pm, with_fixed, x, s, stdout);
+    }
+    if (pm.sel_ln == TRUE)
+    {
+            print_solution_sel(pm, with_fixed, x, s, stdout);
+    }
+    if (pm.neut_ln == TRUE)
+    {
+        print_solution_demo(pm, with_fixed, x, s, stdout);
+    }
 }
 
 void print_result(ParamsModel pm, int with_fixed, int iter,
                   gsl_multimin_fdfminimizer *state, int status, char *s)
 {
     double grad = gsl_blas_dnrm2(state->gradient);
-    printf("%3d  ", iter);
+    print_with_space(&s, iter, stdout, TRUE);
     print_solution(pm, with_fixed, state->x, s);
     // print nan if necessary
     if (is_nan(state->f) == FALSE)
     {
-        printf("%.10f ", -state->f);
+        print_with_space(&s, -state->f, stdout, -200);
         // print nan if necessary
 		if (is_nan(grad) == FALSE)
 		{
-			print_with_space(&s, grad, stdout);
+			print_with_space(&s, grad, stdout, FALSE);
 		}
 		else
 		{
-			printf("   NAN ");
+			printf("%10.10s ", "NAN");
 		}
     }
     else
     {
-        printf("     NAN               NAN      ");
+        printf("%10.10s %10.10s ", "NAN", "NAN");
     }
-	printf("%3d\n", status);
+    print_with_space(&s, status, stdout, TRUE);
+    printf("\n");
 }
 
 /****************************************************************************
@@ -389,9 +397,10 @@ void set_lnL_fdf(const gsl_vector *x, void *pv, double *f, gsl_vector *df)
     set_lnL_df(x, pv, df);
 }
 
-int optimize_using_derivatives(const gsl_multimin_fdfminimizer_type *type,
-                               ParamsOptim po, Params *p, char *s)
+int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
+                        ParamsOptim po, Params *p, char *s)
 {
+    // I optimize either the neutral of the selected likelihood
     unsigned iter = 0;
     unsigned it = 0;
     double grad = 0;
@@ -407,7 +416,16 @@ int optimize_using_derivatives(const gsl_multimin_fdfminimizer_type *type,
     int restart = FALSE;
     int same_state = 0;
 
-    int size = p->pm->neut + p->pm->sel;
+    int size = 0;
+    if (p->pm->neut_ln == TRUE)
+    {
+        size += p->pm->neut;
+    }
+    if (p->pm->sel_ln == TRUE)
+    {
+        size += p->pm->sel;
+    }
+
     gsl_vector *x = gsl_vector_alloc(size);
     gsl_vector *prev_x = gsl_vector_alloc(size);
     // store best solution found before restarting - to avoid looping
@@ -594,8 +612,7 @@ int optimize_using_derivatives(const gsl_multimin_fdfminimizer_type *type,
     }
 
     // store best optimum found
-    p->lnL = state->f;
-    undo_transform(p->pm, state->x);
+    get_lnL(state->x, p);
     p->grad = gsl_blas_dnrm2(state->gradient);
 
     // free memory
@@ -603,6 +620,83 @@ int optimize_using_derivatives(const gsl_multimin_fdfminimizer_type *type,
     gsl_vector_free(prev_x);
     gsl_vector_free(prev_restart_x);
     gsl_multimin_fdfminimizer_free(state);
+
+    return (EXIT_SUCCESS);
+}
+
+int optimize_using_derivatives(const gsl_multimin_fdfminimizer_type *type,
+                               ParamsOptim po, Params *p, char *s)
+{
+    // p->kind: kind of likelihood to optimize
+    // 0: neutral, selected
+    // 1: neutral, selected, joint
+    // 2: joint
+
+    if (p->kind < 2)
+    {
+        if (p->pm->neut > 0)
+        {
+            // first, optimize the neutral likelihood
+            printf("-- Optimizing neutral parameters\n");
+            p->pm->neut_ln = TRUE;
+            p->pm->sel_ln = FALSE;
+            optimize_partial_ln(type, po, p, s);
+        }
+
+        if (p->pm->sel > 0)
+        {
+            // then optimize the selected likelihood
+            printf("-- Optimizing selected parameters\n");
+            p->pm->neut_ln = FALSE;
+            p->pm->sel_ln = TRUE;
+            optimize_partial_ln(type, po, p, s);
+        }
+    }
+
+    if (p->kind == 0)
+    {
+        // I need to calcuale the joint gradient
+        p->pm->neut_ln = TRUE;
+        p->pm->sel_ln = TRUE;
+        int size = p->pm->neut + p->pm->sel;
+
+        gsl_vector *x = gsl_vector_alloc(size);
+        // initialize x
+        transform(&x, *p->pm);
+
+        gsl_multimin_function_fdf func;
+        func.n = x->size;
+        func.f = &get_lnL;
+        func.df = &set_lnL_df;
+        func.fdf = &set_lnL_fdf;
+        func.params = (void *) p;
+
+        // initialize state
+        gsl_multimin_fdfminimizer *state = gsl_multimin_fdfminimizer_alloc(type,
+                                                                           x->size);
+        gsl_multimin_fdfminimizer_set(state, &func, x, po.step_size, po.tol);
+        // calcualte joint gradient
+        p->grad = gsl_blas_dnrm2(state->gradient);
+
+        // free memory
+        gsl_vector_free(x);
+        gsl_multimin_fdfminimizer_free(state);
+
+        // print the info on the joint likelihood and gradient
+        printf("-- Joint likelihood %.15f and gradient %.5f\n", -state->f, p->grad);
+    }
+
+    if (p->kind > 0)
+    {
+        // now optimize jointly
+        printf("-- Optimizing all parameters\n");
+        p->pm->neut_ln = TRUE;
+        p->pm->sel_ln = TRUE;
+        optimize_partial_ln(type, po, p, s);
+    }
+
+    // store best optimum found
+    p->lnL = - p->lnL_neut - p->lnL_sel;
 
     return (EXIT_SUCCESS);
 }

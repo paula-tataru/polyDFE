@@ -1,5 +1,5 @@
 /*
- * polyDFE v1.0: predicting DFE and alpha from polymorphism data
+ * polyDFE v1.11: predicting DFE and alpha from polymorphism data
  * Copyright (c) 2018  Paula Tataru and Marco A.P. Franco
  *
  * This program is free software: you can redistribute it and/or modify
@@ -93,16 +93,16 @@ int handle_status(int status, char *filename, int param)
 
 void print_usage(char *argv, FILE *f)
 {
-    fprintf(f, "%s v1.0\nUsage: %s -d data_file [-m model(A, B, C, D) [K]] [-t]\n\t"
+    fprintf(f, "%s v1.1\nUsage: %s -d data_file [-m model(A, B, C, D) [K]] [-t]\n\t"
             "{-s m_neut L_neut m_sel L_sel n -i init_file ID"
-            " || \n\t[-o optim(bfgs, conj_pr, conj_fr)] [-r range_file ID]"
+            " || \n\t[-o optim(bfgs, conj_pr, conj_fr)] [-k kind(s, j, s+j)] [-r range_file ID]"
             "\n\t\t[-i init_file ID [-j]] [-e] [-w] [-g grouping_file ID]"
             "\n\t\t[-p optim_file ID] [-b [basinhop_file ID]]"
             "\n\t\t[-l min] [-v verbose(0, 1, frequency)]}\n",
             argv, argv);
 }
 
-int parse_options(int argc, char **argv, unsigned *model,
+int parse_options(int argc, char **argv, unsigned *model, unsigned int *kind,
                   unsigned *method, int *time, int *verbose, int* minutes,
                   int *initial_estimation, int *initial_values,
                   int *div, char **data_file,
@@ -120,7 +120,7 @@ int parse_options(int argc, char **argv, unsigned *model,
     int req_flags[6] = { 0,   0,   -1,  -1,   -1,   0 };
     char req_opts[6] = { 'A', 'd', 'm', 'o', 'r', 'i' };
 
-    while ((opt = getopt(argc, argv, "d:m:o:r:i:p:bs:g:tv:ejwhl:")) != -1)
+    while ((opt = getopt(argc, argv, "d:m:k:o:r:i:p:bs:g:tv:ejwhl:")) != -1)
     {
         switch (opt)
         {
@@ -161,12 +161,36 @@ int parse_options(int argc, char **argv, unsigned *model,
                 }
                 else
                 {
-                    fprintf(stderr, "Invalid argument '%s': -m' option "
+                    fprintf(stderr, "Invalid argument '%s': -m option "
                             "requires one of these arguments: A, B, C\n\n",
                             optarg);
                     req_flags[0] = 1;
                 }
                 req_flags[2] = 1;
+                break;
+            }
+            case 'k':
+            {
+                if (strcmp(optarg, "s") == 0)
+                {
+                    *kind = 0;
+                }
+                else if (strcmp(optarg, "s+j") == 0)
+                {
+                    *kind = 1;
+                }
+                else if (strcmp(optarg, "j") == 0)
+                {
+                    *kind = 2;
+                }
+                else
+                {
+                    *kind = 2;
+                    fprintf(stderr, "Invalid argument '%s': -k option "
+                            "requires one of these arguments: s, s+j, j.\n\n",
+                            optarg);
+                    req_flags[0] = 1;
+                }
                 break;
             }
             case 'i':
@@ -519,11 +543,12 @@ int simulate(unsigned model, double *sim, char *data_file, char *init_file,
     return (EXIT_SUCCESS);
 }
 
-int optimize(unsigned model, unsigned method, char *data_file, char *group_file,
-             int group_id, char *optim_file, int optim_id, char *range_file,
-             int range_id, char *init_file, int init_id, char *basinhop_file,
-             int basinhop_id, char *cubature_file, int cubature_id, int verbose,
-             int minutes,  int initial_estimation, int initial_values, int div)
+int optimize(unsigned model, unsigned kind, unsigned method, char *data_file,
+             char *group_file, int group_id, char *optim_file, int optim_id,
+             char *range_file, int range_id, char *init_file, int init_id,
+             char *basinhop_file, int basinhop_id, char *cubature_file,
+             int cubature_id, int verbose, int minutes,  int initial_estimation,
+             int initial_values, int div)
 {
     int status = EXIT_SUCCESS;
     int parsed = EXIT_SUCCESS;
@@ -538,6 +563,7 @@ int optimize(unsigned model, unsigned method, char *data_file, char *group_file,
         // do not estimate lambda
         p.pm->lambda_flag = FALSE;
     }
+    p.kind = kind;
     p.verbose = verbose;
 
     ParamsOptim po;
@@ -690,6 +716,8 @@ int main(int argc, char **argv)
 
     // default model: 3 (C)
     unsigned model = 3;
+    // default kind: 2 (joint likelihood)
+    unsigned kind = 2;
     // default method: 1 (BFGS)
     unsigned method = 1;
     int time = FALSE;
@@ -697,7 +725,7 @@ int main(int argc, char **argv)
     // default limit on running time should be 5h - 300 minutes!
     int minutes = 300;
 
-    int status = parse_options(argc, argv, &model, &method, &time, &verbose,
+    int status = parse_options(argc, argv, &model, &kind, &method, &time, &verbose,
                                &minutes, &initial_estimation, &initial_values,
                                &div, &data_file,
                                &group_file, &group_id, &optim_file, &optim_id,
@@ -749,7 +777,7 @@ int main(int argc, char **argv)
     }
     else
     {
-        status = optimize(model, method, data_file, group_file, group_id,
+        status = optimize(model, kind, method, data_file, group_file, group_id,
                           optim_file, optim_id, range_file, range_id, init_file,
                           init_id, basinhop_file, basinhop_id, cubature_file,
                           cubature_id, verbose, minutes,

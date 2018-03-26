@@ -1,5 +1,5 @@
 /*
- * polyDFE v1.0: predicting DFE and alpha from polymorphism data
+ * polyDFE v1.11: predicting DFE and alpha from polymorphism data
  * Copyright (c) 2018  Paula Tataru
  *
  * This program is free software: you can redistribute it and/or modify
@@ -98,63 +98,68 @@ void transform(gsl_vector **x, ParamsModel pm)
     unsigned i = 0;
     unsigned j = 0;
 
-    if (pm.r_flag == TRUE)
+    if (pm.neut_ln == TRUE)
     {
-        // r[0] should always be 1
-        for (i = 1; i < pm.no_groups; i++)
+        if (pm.r_flag == TRUE)
         {
-            gsl_vector_set((*x), i - 1,
-                           tran_one(pm.r[i], pm.r_min, pm.r_max, pm.k));
+            // r[0] should always be 1
+            for (i = 1; i < pm.no_groups; i++)
+            {
+                gsl_vector_set((*x), i - 1,
+                               tran_one(pm.r[i], pm.r_min, pm.r_max, pm.k));
+            }
+            i--;
         }
-        i--;
-    }
-    if (pm.lambda_flag == TRUE)
-    {
-        gsl_vector_set((*x), i++,
-                       tran(pm.lambda, pm.lambda_min, pm.lambda_max, pm.k));
-    }
-    if (pm.theta_bar_flag == TRUE)
-    {
-        gsl_vector_set((*x),
-                       i++,
-                       tran(pm.theta_bar, pm.theta_bar_min, pm.theta_bar_max,
-                            pm.k));
-    }
-    if (pm.a_flag == TRUE)
-    {
-        gsl_vector_set((*x),
-                       i++,
-                       tran_one(pm.a, pm.a_min, pm.a_max, pm.k));
-    }
-    if (pm.eps_an_flag == TRUE)
-    {
-        gsl_vector_set((*x), i++,
-                       tran(pm.eps_an, pm.eps_an_min, pm.eps_an_max, pm.k));
-    }
-
-    // b - position 1 - should be transformed around one
-    // everything else has the normal transformation
-    // I don't need to treat model D separately because I have the flags set
-    // to FALSE for the selection coefficients
-    for (j = 0; j < pm.no_sel; j++)
-    {
-        if (pm.sel_flag[j] != TRUE)
-        {
-            // skip this
-            continue;
-        }
-        if (pm.model < 4 && j == 1)
+        if (pm.lambda_flag == TRUE)
         {
             gsl_vector_set((*x), i++,
-                           tran_one(pm.sel_params[j], pm.sel_min[j], pm.sel_max[j], pm.k));
+                           tran(pm.lambda, pm.lambda_min, pm.lambda_max, pm.k));
         }
-        else
+        if (pm.theta_bar_flag == TRUE)
+        {
+            gsl_vector_set((*x),
+                           i++,
+                           tran(pm.theta_bar, pm.theta_bar_min, pm.theta_bar_max,
+                                pm.k));
+        }
+        if (pm.a_flag == TRUE)
+        {
+            gsl_vector_set((*x),
+                           i++,
+                           tran_one(pm.a, pm.a_min, pm.a_max, pm.k));
+        }
+        if (pm.eps_an_flag == TRUE)
         {
             gsl_vector_set((*x), i++,
-                           tran(pm.sel_params[j], pm.sel_min[j], pm.sel_max[j], pm.k));
+                           tran(pm.eps_an, pm.eps_an_min, pm.eps_an_max, pm.k));
         }
     }
 
+    if (pm.sel_ln == TRUE)
+    {
+        // b - position 1 - should be transformed around one
+        // everything else has the normal transformation
+        // I don't need to treat model D separately because I have the flags set
+        // to FALSE for the selection coefficients
+        for (j = 0; j < pm.no_sel; j++)
+        {
+            if (pm.sel_flag[j] != TRUE)
+            {
+                // skip this
+                continue;
+            }
+            if (pm.model < 4 && j == 1)
+            {
+                gsl_vector_set((*x), i++,
+                               tran_one(pm.sel_params[j], pm.sel_min[j], pm.sel_max[j], pm.k));
+            }
+            else
+            {
+                gsl_vector_set((*x), i++,
+                               tran(pm.sel_params[j], pm.sel_min[j], pm.sel_max[j], pm.k));
+            }
+        }
+    }
 }
 
 void undo_transform(ParamsModel *pm, const gsl_vector *x)
@@ -162,66 +167,72 @@ void undo_transform(ParamsModel *pm, const gsl_vector *x)
     unsigned i = 0;
     unsigned j = 0;
 
-    if (pm->r_flag == TRUE)
+    if (pm->neut_ln == TRUE)
     {
-        // r[0] should always be 1
-        for (i = 1; i < pm->no_groups; i++)
+        if (pm->r_flag == TRUE)
         {
-            pm->r[i] = untran_one(gsl_vector_get(x, i - 1), pm->r_min,
-                                  pm->r_max, pm->k);
+            // r[0] should always be 1
+            for (i = 1; i < pm->no_groups; i++)
+            {
+                pm->r[i] = untran_one(gsl_vector_get(x, i - 1), pm->r_min,
+                                      pm->r_max, pm->k);
+            }
+            i--;
         }
-        i--;
-    }
-    if (pm->lambda_flag == TRUE)
-    {
-        pm->lambda = untran(gsl_vector_get(x, i++), pm->lambda_min,
-                            pm->lambda_max, pm->k);
-    }
-    if (pm->theta_bar_flag == TRUE)
-    {
-        pm->theta_bar = untran(gsl_vector_get(x, i++), pm->theta_bar_min,
-                               pm->theta_bar_max, pm->k);
-    }
-    if (pm->a_flag == TRUE)
-    {
-        pm->a = untran_one(gsl_vector_get(x, i++), pm->a_min,
-                               pm->a_max, pm->k);
-    }
-    if (pm->eps_an_flag == TRUE)
-    {
-        pm->eps_an = untran(gsl_vector_get(x, i++), pm->eps_an_min,
-                            pm->eps_an_max, pm->k);
+        if (pm->lambda_flag == TRUE)
+        {
+            pm->lambda = untran(gsl_vector_get(x, i++), pm->lambda_min,
+                                pm->lambda_max, pm->k);
+        }
+        if (pm->theta_bar_flag == TRUE)
+        {
+            pm->theta_bar = untran(gsl_vector_get(x, i++), pm->theta_bar_min,
+                                   pm->theta_bar_max, pm->k);
+        }
+        if (pm->a_flag == TRUE)
+        {
+            pm->a = untran_one(gsl_vector_get(x, i++), pm->a_min,
+                                   pm->a_max, pm->k);
+        }
+        if (pm->eps_an_flag == TRUE)
+        {
+            pm->eps_an = untran(gsl_vector_get(x, i++), pm->eps_an_min,
+                                pm->eps_an_max, pm->k);
+        }
     }
 
-    // b - position 1 - should be transformed around one
-    // everything else has the normal transformation
-    for (j = 0; j < pm->no_sel; j++)
+    if (pm->sel_ln == TRUE)
     {
-        if (pm->sel_flag[j] != TRUE)
+        // b - position 1 - should be transformed around one
+        // everything else has the normal transformation
+        for (j = 0; j < pm->no_sel; j++)
         {
-            // skip this
-            continue;
-        }
-        if (pm->model < 4 && j == 1)
-        {
-            pm->sel_params[j] = untran_one(gsl_vector_get(x, i++), pm->sel_min[j], pm->sel_max[j],
-                                           pm->k);
-        }
-        else
-        {
-            pm->sel_params[j] = untran(gsl_vector_get(x, i++), pm->sel_min[j], pm->sel_max[j],
-                                       pm->k);
-        }
-    }
-    // if model 4, set the first estimated parameter to 1 - sum(rest)
-    if (pm->model == 4)
-    {
-        pm->sel_params[pm->sel_fixed] = 1;
-        for (j = 0; j < pm->no_sel/2; j++)
-        {
-            if (2*j+1 != pm->sel_fixed)
+            if (pm->sel_flag[j] != TRUE)
             {
-                pm->sel_params[pm->sel_fixed] -= pm->sel_params[2*j+1];
+                // skip this
+                continue;
+            }
+            if (pm->model < 4 && j == 1)
+            {
+                pm->sel_params[j] = untran_one(gsl_vector_get(x, i++), pm->sel_min[j], pm->sel_max[j],
+                                               pm->k);
+            }
+            else
+            {
+                pm->sel_params[j] = untran(gsl_vector_get(x, i++), pm->sel_min[j], pm->sel_max[j],
+                                           pm->k);
+            }
+        }
+        // if model 4, set the first estimated parameter to 1 - sum(rest)
+        if (pm->model == 4)
+        {
+            pm->sel_params[pm->sel_fixed] = 1;
+            for (j = 0; j < pm->no_sel/2; j++)
+            {
+                if (2*j+1 != pm->sel_fixed)
+                {
+                    pm->sel_params[pm->sel_fixed] -= pm->sel_params[2*j+1];
+                }
             }
         }
     }
@@ -250,88 +261,94 @@ void random_step(ParamsModel *pm, double step)
     // for the parameters that have the transformation around one
     // because the step and the parameters do not have the same meaning
 
-    if (pm->r_flag == TRUE)
+    if (pm->neut_ln == TRUE)
     {
-        // r[0] should always be 1
-        for (i = 1; i < pm->no_groups; i++)
+        if (pm->r_flag == TRUE)
         {
-            pm->r[i] = one_step(
-                            untran_step(step, pm->r_max - pm->r_min, pm->k),
-                            pm->r[i], pm->r_min, pm->r_max);
-        }
-    }
-    if (pm->lambda_flag == TRUE)
-    {
-        pm->lambda = one_step(
-                        untran_step(step, pm->lambda_max - pm->lambda_min, pm->k),
-                        pm->lambda, pm->lambda_min, pm->lambda_max);
-    }
-    if (pm->theta_bar_flag == TRUE)
-    {
-        pm->theta_bar = one_step(
-                        untran_step(step, pm->theta_bar_max - pm->theta_bar_min, pm->k),
-                        pm->theta_bar, pm->theta_bar_min, pm->theta_bar_max);
-    }
-    if (pm->a_flag == TRUE)
-    {
-        pm->a = one_step(
-                        untran_step(step, pm->a_max - pm->a_min, pm->k),
-                        pm->a, pm->a_min, pm->a_max);
-    }
-    if (pm->eps_an_flag == TRUE)
-    {
-        pm->eps_an = one_step(
-                        untran_step(step, pm->eps_an_max - pm->eps_an_min, pm->k),
-                        pm->eps_an, pm->eps_an_min, pm->eps_an_max);
-    }
-    
-    if (pm->model < 4)
-    {
-        for (i = 0; i < pm->no_sel; i++)
-        {
-            if (pm->sel_flag[i] == FALSE)
+            // r[0] should always be 1
+            for (i = 1; i < pm->no_groups; i++)
             {
-                // skip this
-                continue;
-            }
-            pm->sel_params[i] = one_step(
-                            untran_step(step,  pm->sel_max[i] - pm->sel_min[i], pm->k),
-                            pm->sel_params[i], pm->sel_min[i], pm->sel_max[i]);
-        }
-    }
-    else
-    {
-        // for model D I have a special randomization of parameters
-        // due to the constraint that probabilities need to sum to 1
-        double sum = 1;
-        double aux_step = 0;
-        double max = 0;
-        for (i = 0; i < pm->no_sel/2; i++)
-        {
-            // only randomize if this parameter is estimated
-            if (pm->sel_flag[2 * i + 1] == TRUE)
-            {
-                max = sum < pm->sel_max[2 * i + 1] ?
-                                sum : pm->sel_max[2 * i + 1];
-                // divide max by the remaining number of parameters
-                max /= (pm->no_sel / 2 - (i - 1));
-                aux_step = untran_step(step, max - pm->sel_min[2 * i + 1],
-                                       pm->k);
-                // need to check that pm->sel_params[2*i+1] < max
-                pm->sel_params[2 * i + 1] =
-                                pm->sel_params[2 * i + 1] < max ?
-                                                pm->sel_params[2 * i + 1] : max;
-                pm->sel_params[2 * i + 1] = one_step(aux_step,
-                                                     pm->sel_params[2 * i + 1],
-                                                     pm->sel_min[2 * i + 1],
-                                                     max);
-            }
-            // update the remaining value
-            if (pm->sel_flag[2 * i + 1] != 2)
-            {
-                sum -= pm->sel_params[2*i+1];
+                pm->r[i] = one_step(
+                                untran_step(step, pm->r_max - pm->r_min, pm->k),
+                                pm->r[i], pm->r_min, pm->r_max);
             }
         }
-        pm->sel_params[pm->sel_fixed] = sum;
+        if (pm->lambda_flag == TRUE)
+        {
+            pm->lambda = one_step(
+                            untran_step(step, pm->lambda_max - pm->lambda_min, pm->k),
+                            pm->lambda, pm->lambda_min, pm->lambda_max);
+        }
+        if (pm->theta_bar_flag == TRUE)
+        {
+            pm->theta_bar = one_step(
+                            untran_step(step, pm->theta_bar_max - pm->theta_bar_min, pm->k),
+                            pm->theta_bar, pm->theta_bar_min, pm->theta_bar_max);
+        }
+        if (pm->a_flag == TRUE)
+        {
+            pm->a = one_step(
+                            untran_step(step, pm->a_max - pm->a_min, pm->k),
+                            pm->a, pm->a_min, pm->a_max);
+        }
+        if (pm->eps_an_flag == TRUE)
+        {
+            pm->eps_an = one_step(
+                            untran_step(step, pm->eps_an_max - pm->eps_an_min, pm->k),
+                            pm->eps_an, pm->eps_an_min, pm->eps_an_max);
+        }
+    }
+
+    if (pm->sel_ln == TRUE)
+    {
+        if (pm->model < 4)
+        {
+            for (i = 0; i < pm->no_sel; i++)
+            {
+                if (pm->sel_flag[i] == FALSE)
+                {
+                    // skip this
+                    continue;
+                }
+                pm->sel_params[i] = one_step(
+                                untran_step(step,  pm->sel_max[i] - pm->sel_min[i], pm->k),
+                                pm->sel_params[i], pm->sel_min[i], pm->sel_max[i]);
+            }
+        }
+        else
+        {
+            // for model D I have a special randomization of parameters
+            // due to the constraint that probabilities need to sum to 1
+            double sum = 1;
+            double aux_step = 0;
+            double max = 0;
+            for (i = 0; i < pm->no_sel/2; i++)
+            {
+                // only randomize if this parameter is estimated
+                if (pm->sel_flag[2 * i + 1] == TRUE)
+                {
+                    max = sum < pm->sel_max[2 * i + 1] ?
+                                    sum : pm->sel_max[2 * i + 1];
+                    // divide max by the remaining number of parameters
+                    max /= (pm->no_sel / 2 - (i - 1));
+                    aux_step = untran_step(step, max - pm->sel_min[2 * i + 1],
+                                           pm->k);
+                    // need to check that pm->sel_params[2*i+1] < max
+                    pm->sel_params[2 * i + 1] =
+                                    pm->sel_params[2 * i + 1] < max ?
+                                                    pm->sel_params[2 * i + 1] : max;
+                    pm->sel_params[2 * i + 1] = one_step(aux_step,
+                                                         pm->sel_params[2 * i + 1],
+                                                         pm->sel_min[2 * i + 1],
+                                                         max);
+                }
+                // update the remaining value
+                if (pm->sel_flag[2 * i + 1] != 2)
+                {
+                    sum -= pm->sel_params[2*i+1];
+                }
+            }
+            pm->sel_params[pm->sel_fixed] = sum;
+        }
     }
 }
