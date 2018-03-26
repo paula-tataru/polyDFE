@@ -1,5 +1,5 @@
 /*
- * polyDFE v1.0: predicting DFE and alpha from polymorphism data
+ * polyDFE v1.11: predicting DFE and alpha from polymorphism data
  * Copyright (c) 2018  Paula Tataru and Marco A.P. Franco
  *
  * This program is free software: you can redistribute it and/or modify
@@ -143,7 +143,6 @@ void initialize_params_model(ParamsModel *pm)
     pm->inv_groups = NULL;
 
     pm->eps_an = 0;
-    pm->eps_cont = 0;
     pm->lambda = 0;
 
     // parameters for mutation distribution
@@ -161,8 +160,6 @@ void initialize_params_model(ParamsModel *pm)
     pm->r_max = 10;
     pm->eps_an_min = 0;
     pm->eps_an_max = 0.5;
-    pm->eps_cont_min = 0;
-    pm->eps_cont_max = 0.5;
     pm->lambda_min = 0;
     pm->lambda_max = 0.5;
     pm->theta_bar_min = 0;
@@ -175,7 +172,6 @@ void initialize_params_model(ParamsModel *pm)
     // parameters flags
     pm->r_flag = TRUE;
     pm->eps_an_flag = TRUE;
-    pm->eps_cont_flag = FALSE;
     pm->lambda_flag = TRUE;
     pm->theta_bar_flag = TRUE;
     pm->a_flag = TRUE;
@@ -185,6 +181,9 @@ void initialize_params_model(ParamsModel *pm)
     // number of parameters to estimate
     pm->neut = 0;
     pm->sel = 0;
+
+    pm->neut_ln = FALSE;
+    pm->sel_ln = FALSE;
 
     pm->k = 0.01;
 
@@ -204,7 +203,11 @@ void initialize_params(Params *p)
     p->verbose = 0;
 
     p->lnL = DBL_MAX;
+    p->lnL_neut = DBL_MAX;
+    p->lnL_sel = DBL_MAX;
     p->grad = DBL_MAX;
+
+    p->kind = 2;
 
     p->counter = 0;
     p->max_counter = 5000;
@@ -334,8 +337,13 @@ int allocate_grouping(ParamsModel *pm, double *groups)
         }
 
         // + 1 for r[1] = 1
-        // + 1 because the number in file is 1 too small
-        pm->no_groups = (int) groups[1] + 2;
+        pm->no_groups = (int) groups[1] + 1;
+        // if the last entry in the groups is not the last needed r
+        //I have to add another +1
+        if (groups[(int) groups[1] + 1] < pm->no_r)
+        {
+            pm->no_groups++;
+        }
 
         // first entry in r is always set to 1
         // keep it in its own group
@@ -504,7 +512,6 @@ void copy_params_model(ParamsModel *pm, ParamsModel source)
     }
 
     pm->eps_an = source.eps_an;
-    pm->eps_cont = source.eps_cont;
     pm->lambda = source.lambda;
     pm->theta_bar = source.theta_bar;
     pm->a = source.a;
@@ -519,8 +526,6 @@ void copy_params_model(ParamsModel *pm, ParamsModel source)
     pm->r_max = source.r_max;
     pm->eps_an_min = source.eps_an_min;
     pm->eps_an_max = source.eps_an_max;
-    pm->eps_cont_min = source.eps_cont_min;
-    pm->eps_cont_max = source.eps_cont_max;
     pm->lambda_min = source.lambda_min;
     pm->lambda_max = source.lambda_max;
     pm->theta_bar_min = source.theta_bar_min;
@@ -537,7 +542,6 @@ void copy_params_model(ParamsModel *pm, ParamsModel source)
 
     pm->r_flag = source.r_flag;
     pm->eps_an_flag = source.eps_an_flag;
-    pm->eps_cont_flag = source.eps_cont_flag;
     pm->lambda_flag = source.lambda_flag;
     pm->theta_bar_flag = source.theta_bar_flag;
     pm->a_flag = source.a_flag;
@@ -606,9 +610,8 @@ void set_params_sel(ParamsModel *pm, int no_steps, int *it)
 	}
 }
 
-void set_params_eps(ParamsModel *pm, int no_steps, int *it)
+void set_params_eps(ParamsModel *pm, int no_steps, int it)
 {
-    unsigned i = 0;
     double diff = 0;
     // move away from boundaries with per
     double per = 0.2;
@@ -616,13 +619,7 @@ void set_params_eps(ParamsModel *pm, int no_steps, int *it)
     {
         diff = pm->eps_an_max - pm->eps_an_min;
         pm->eps_an = pm->eps_an_min + diff * per
-                        + diff * (1 - 2 * per) * it[i++] / no_steps;
-    }
-    if (pm->eps_cont_flag == TRUE)
-    {
-        diff = pm->eps_cont_max - pm->eps_cont_min;
-        pm->eps_cont = pm->eps_cont_min + diff * per
-                        + diff * (1 - 2 * per) * it[i++] / no_steps;
+                        + diff * (1 - 2 * per) * it / no_steps;
     }
 }
 
@@ -646,10 +643,6 @@ void count_params(ParamsModel *pm)
         pm->neut++;
     }
     if (pm->eps_an_flag == TRUE)
-    {
-        pm->neut++;
-    }
-    if (pm->eps_cont_flag == TRUE)
     {
         pm->neut++;
     }
@@ -1139,22 +1132,6 @@ void set_anc_expec(double eps_an, int n, double **e)
     }
 }
 
-void set_cont_expec(double eps_cont, int n, double **expec_neut,
-                    double *expec_sel)
-{
-    // add contamination error
-    // relies on the selected expectations to already be calculated
-    if (eps_cont != 0)
-    {
-        unsigned i = 0;
-        for (i = 0; i < n; i++)
-        {
-            (*expec_neut)[i] = (1 - eps_cont) * (*expec_neut)[i]
-                            + eps_cont * expec_sel[i];
-        }
-    }
-}
-
 /****************************************************************************
  * Likelihood calculation for one fragment
  ****************************************************************************/
@@ -1238,6 +1215,7 @@ void set_sel_lnL(Params *p)
 {
     int status = EXIT_SUCCESS;
 
+    // calculate expectations
     status = set_sel_expec(p->pm, &p->expec_sel, FALSE);
     if (status == EXIT_FAILURE)
     {
@@ -1251,18 +1229,7 @@ void set_sel_lnL(Params *p)
     }
 }
 
-void set_neut_lnL(Params *p)
-{
-    // calculate expectations
-    // it relies on having already calculated the selected expectations
-    set_neut_expec(*p->pm, &p->expec_neut);
-    // add ancestral and contamination error
-    set_anc_expec(p->pm->eps_an, p->pm->n, &p->expec_neut);
-    set_cont_expec(p->pm->eps_cont, p->pm->n, &p->expec_neut, p->expec_sel);
-    p->lnL_neut = get_lnL_aux(p, p->no_neut, p->counts_neut, p->expec_neut);
-}
-
-double get_lnL(const gsl_vector *x, void *pv)
+double get_sel_lnL(const gsl_vector *x, void *pv)
 {
     Params *p = (Params *) pv;
 
@@ -1291,13 +1258,57 @@ double get_lnL(const gsl_vector *x, void *pv)
     }
 
     set_sel_lnL(p);
-    if (gsl_isnan(p->lnL_sel) == 1)
+
+    return ( - p->lnL_sel);
+}
+
+void set_neut_lnL(Params *p)
+{
+    // calculate expectations
+    // it relies on having already calculated the selected expectations
+    set_neut_expec(*p->pm, &p->expec_neut);
+    // add ancestral error
+    set_anc_expec(p->pm->eps_an, p->pm->n, &p->expec_neut);
+    p->lnL_neut = get_lnL_aux(p, p->no_neut, p->counts_neut, p->expec_neut);
+}
+
+double get_neut_lnL(const gsl_vector *x, void *pv)
+{
+    Params *p = (Params *) pv;
+
+    // check the counter
+    if (p->counter >= p->max_counter)
     {
-        // return (GSL_NAN);
+        // reached maximum number of allowed likelihood evaluations
+        // per optimization iteration
+        // so GSL might be stuck - force it to stop by returning Inf
         return (DBL_MAX);
     }
 
+    // update counter
+    p->counter++;
+
+    // update the content of p from x
+    undo_transform(p->pm, x);
+
     set_neut_lnL(p);
 
-    return (-(p->lnL_neut + p->lnL_sel));
+    return (- p->lnL_neut);
+}
+
+double get_lnL(const gsl_vector *x, void *pv)
+{
+    double ln = 0;
+    Params *p = (Params *) pv;
+
+    if (p->pm->neut_ln == TRUE)
+    {
+        ln += get_neut_lnL(x, pv);
+    }
+    if (p->pm->sel_ln == TRUE)
+    {
+        ln += get_sel_lnL(x, pv);
+    }
+
+    return (ln);
 }
