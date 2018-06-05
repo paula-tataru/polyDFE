@@ -185,16 +185,10 @@ int estimate_mut(Params *p, double *obs_r)
     if (p->pm->theta_bar_flag == TRUE)
     {
         p->pm->theta_bar = mut_mean;
-        // check estimation is within given ranges
-        status += check_lim_update(&p->pm->theta_bar, &p->pm->theta_bar_min,
-                                   &p->pm->theta_bar_max, TRUE, "theta_bar");
     }
     if (p->pm->a_flag == TRUE)
     {
         p->pm->a = mut_shape;
-        // check estimation is within given ranges
-        status += check_lim_update(&p->pm->a, &p->pm->a_min, &p->pm->a_max,
-                                   TRUE, "a");
     }
 
     // for some reason, (*obs_r) can be negative sometimes
@@ -289,13 +283,6 @@ int estimate_neut(Params *p)
         {
             p->pm->r[p->pm->no_groups - 1] = p->pm->r[p->pm->no_groups - 2];
         }
-
-        // check estimation is within given ranges
-        for (i = 1; i < p->pm->no_groups; i++)
-        {
-            status += check_lim_update(&p->pm->r[i], &p->pm->r_min,
-                                       &p->pm->r_max, TRUE, "r");
-        }
     }
 
     if (p->pm->lambda_flag == TRUE)
@@ -317,10 +304,6 @@ int estimate_neut(Params *p)
             p->pm->lambda = p->pm->lambda / p->no_neut
                             - p->pm->theta_bar / p->pm->n;
         }
-
-        // check estimation is within given ranges
-        status += check_lim_update(&p->pm->lambda, &p->pm->lambda_min,
-                                   &p->pm->lambda_max, TRUE, "lambda");
     }
 
     free(obs_diff);
@@ -342,10 +325,12 @@ int estimate_grid_neut(Params *p, int no_grids)
     best_pm.no_sel = p->pm->no_sel;
     allocate_selection_params(&best_pm);
     allocate_grouping(&best_pm, NULL);
+    copy_params_model(&best_pm, *p->pm);
 
     set_expec_sel_to_obs(p, &p->expec_sel);
 
     int it = 0;
+    int i = 0;
 
     if (p->pm->eps_an_flag == FALSE)
     {
@@ -372,6 +357,36 @@ int estimate_grid_neut(Params *p, int no_grids)
     copy_params_model(p->pm, best_pm);
     free_params_model(&best_pm);
 
+    best_status = EXIT_SUCCESS;
+
+    // check the ranges for the parameters
+    if (p->pm->theta_bar_flag != FALSE)
+    {
+        best_status += check_lim_update(&p->pm->theta_bar, &p->pm->theta_bar_min,
+                                   &p->pm->theta_bar_max, TRUE, "theta_bar");
+    }
+    if (p->pm->a_flag != FALSE)
+    {
+        best_status += check_lim_update(&p->pm->a, &p->pm->a_min, &p->pm->a_max,
+                                   TRUE, "a");
+    }
+    if (p->pm->r_flag != FALSE)
+    {
+        char *aux = (char*) malloc(20 * sizeof(char));
+        for (i = 1; i < p->pm->no_groups; i++)
+        {
+            sprintf(aux, "r %d", i + 1);
+            best_status += check_lim_update(&p->pm->r[i], &p->pm->r_min,
+                                       &p->pm->r_max, TRUE, aux);
+        }
+        free(aux);
+    }
+    if (p->pm->lambda_flag != FALSE)
+    {
+        best_status += check_lim_update(&p->pm->lambda, &p->pm->lambda_min,
+                                   &p->pm->lambda_max, TRUE, "lambda");
+    }
+
     return (best_status);
 }
 
@@ -388,6 +403,7 @@ void estimate_grid_sel(Params *p, int no_grids)
         best_pm.no_sel = p->pm->no_sel;
         allocate_selection_params(&best_pm);
         allocate_grouping(&best_pm, NULL);
+        copy_params_model(&best_pm, *p->pm);
 
         int it[4] = { 0, 0, 0, 0 };
         for (it[0] = 0; it[0] <= no_grids; it[0]++)
@@ -682,23 +698,6 @@ int run_basin_hopping(ParamsBasinHop *pb,
     // flag for final printing - it is only set to TRUE if it doesn't fail with errors
     unsigned print_flag = FALSE;
 
-    // check that I have at least two fragments for estimating a
-    if (p->no_neut == 1 && p->no_sel == 1 && p->pm->a != -1)
-    {
-        fprintf(stderr,
-                "---- Warning: mutation variability is not used "
-                "when only one neutral and one selected fragment is available.\n");
-        p->pm->a = -1;
-    }
-
-    if (p->pm->a == -1)
-    {
-        printf("---- No mutation variability. Using Poisson likelihood.\n\n");
-        p->pm->a_flag = FALSE;
-        p->pm->a_max = 1;
-        p->pm->a_min = -2;
-    }
-
     // make sure it works both on neutral and selected
     p->pm->neut_ln = TRUE;
     p->pm->sel_ln = TRUE;
@@ -735,6 +734,10 @@ int run_basin_hopping(ParamsBasinHop *pb,
             {
                 status = FOUND_NAN;
             }
+
+            // initialize likelihood to DBL_MAX
+            // so that the rest of basin hopping works
+            lnL = DBL_MAX;
 
             // initialize vector for storing intermediate solutions
             transform(&x, *p->pm);

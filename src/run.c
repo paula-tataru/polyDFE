@@ -635,11 +635,35 @@ int optimize(unsigned model, unsigned kind, unsigned method, char *data_file,
         status += handle_status(parsed, init_file, init_id);
     }
 
-
     if (status != EXIT_SUCCESS)
     {
         free_params(&p);
         return (EXIT_FAILURE);
+    }
+
+    if (p.counts_neut[0].sfs[p.pm->n - 1] == -1)
+    {
+        printf("---- Data does not contain divergence counts. Using option -w.\n");
+        // make sure that div and lambda are not used
+        p.pm->div_flag = FALSE;
+        p.pm->lambda_flag = FALSE;
+    }
+
+    // check that I have at least two fragments for estimating a
+    if (p.no_neut == 1 && p.no_sel == 1 && p.pm->a != -1)
+    {
+        fprintf(stderr,
+                "---- Warning: mutation variability is not used "
+                "when only one neutral and one selected fragment is available.\n");
+        p.pm->a = -1;
+    }
+
+    if (p.pm->a == -1)
+    {
+        printf("---- No mutation variability. Using Poisson likelihood.\n\n");
+        p.pm->a_flag = FALSE;
+        p.pm->a_max = 1;
+        p.pm->a_min = -2;
     }
 
     allocate_params_basin_hop(&pb, p.pm);
@@ -665,14 +689,6 @@ int optimize(unsigned model, unsigned kind, unsigned method, char *data_file,
             type = gsl_multimin_fdfminimizer_conjugate_fr;
             break;
         }
-    }
-
-    if (p.counts_neut[0].sfs[p.pm->n - 1] == -1)
-    {
-        printf("---- Data does not contain divergence counts. Using option -w.\n");
-        // make sure that div and lambda are not used
-        p.pm->div_flag = FALSE;
-        p.pm->lambda_flag = FALSE;
     }
 
     status = run_basin_hopping(&pb, type, po, &p);

@@ -153,8 +153,6 @@ void initialize_params_model(ParamsModel *pm)
     pm->no_sel = 0;
     pm->sel_params = NULL;
 
-    pm->div_flag = TRUE;
-
     // parameters ranges
     pm->r_min = 0;
     pm->r_max = 10;
@@ -177,6 +175,8 @@ void initialize_params_model(ParamsModel *pm)
     pm->a_flag = TRUE;
     pm->sel_flag = NULL;
     pm->sel_fixed = 1;
+
+    pm->div_flag = TRUE;
 
     // number of parameters to estimate
     pm->neut = 0;
@@ -210,7 +210,7 @@ void initialize_params(Params *p)
     p->kind = 2;
 
     p->counter = 0;
-    p->max_counter = 5000;
+    p->max_counter = 1000;
 
     p->pm = malloc(sizeof(ParamsModel));
     initialize_params_model(p->pm);
@@ -234,7 +234,7 @@ void initialize_selection_params(ParamsModel *pm, char *range)
             pm->sel_min[0] = -100000;
             pm->sel_max[0] = 0;
             // b
-            pm->sel_min[1] = 0;
+            pm->sel_min[1] = 0.01;
             pm->sel_max[1] = 10;
             if (pm->model == 1)
             {
@@ -484,9 +484,9 @@ void free_params(Params *p)
     {
         free(p->expec_sel);
     }
-    free_params_model(p->pm);
     if (p->pm)
     {
+        free_params_model(p->pm);
         free(p->pm);
     }
 }
@@ -543,6 +543,7 @@ void copy_params_model(ParamsModel *pm, ParamsModel source)
     pm->r_flag = source.r_flag;
     pm->eps_an_flag = source.eps_an_flag;
     pm->lambda_flag = source.lambda_flag;
+    pm->div_flag = source.div_flag;
     pm->theta_bar_flag = source.theta_bar_flag;
     pm->a_flag = source.a_flag;
     for (i = 0; i < pm->no_sel; i++)
@@ -746,28 +747,88 @@ double approx_div_int(ParamsModel *pm, double S)
     return (result);
 }
 
+double get_sel_expec_fix_small_sel(ParamsModel *pm, double S)
+{
+    // when S is close to 0, use the taylor expansion instead
+	double aux = 0;
+
+    // expectation for SFS
+    if (pm->i < pm->n - 1)
+    {
+    	int j = pm->i + 1;
+    	aux = (1.0 / j
+					+ S / (2 * (pm->n + 1))
+					+ (2 * j -  pm->n) * S * S
+							/ (12 * (pm->n + 1) * (pm->n + 2)));
+    	if (aux < 0)
+		{
+			fprintf(stderr,
+					"Expectation for SFS is negative, i %d n %d S %g "
+					"aux %g\n",
+					pm->i + 1, pm->n, S, aux);
+			exit(1);
+		}
+
+    	return (pm->theta_bar * pm->r[pm->inv_groups[pm->i]] * aux);
+    }
+
+    // expectation for divergence
+    double div = 1 + S / 2 + S * S / 12;
+
+    // add miss-attributed polymorphism
+    if (pm->div_flag == TRUE)
+    {
+        div *= pm->lambda;
+
+        aux = (1.0 / pm->n
+					+ S * (12 + pm->n * (S + 6))
+							/ (12 * (pm->n + 1) * (pm->n + 2)));
+
+        if (aux < 0)
+    	{
+    		fprintf(stderr,
+    				"Expectation for divergence is negative, n %d S %g aux %g\n",
+    				pm->n, S, aux);
+    		exit(1);
+    	}
+
+        // with r for divergence
+        if (pm->no_r == pm->n)
+        {
+            div += pm->theta_bar * pm->r[pm->inv_groups[pm->n - 1]] * aux;
+        }
+        else
+        {
+            // without r for divergence - assume 1
+            div += pm->theta_bar * aux;
+        }
+    }
+
+    return (div);
+}
+
 double get_sel_expec_fix_sel(ParamsModel *pm, double S)
 {
-    // when S is close to 0, use the neutral expectations
-    if (fabs(S) <= 1e-10)
+    // when S is close to 0, use the Taylor expansion instead
+    if (fabs(S) <= 1e-5)
     {
-        return (get_neut_expec(*pm));
+        return (get_sel_expec_fix_small_sel(pm, S));
     }
 
     // need to treat S > 0 and S < 0 separately
-    // for numerical stability
-    double eS = 0;
-    double meS = 0;
+	// for numerical stability
+	double eS = 0;
+	double meS = 0;
 
-    if (S < 0)
-    {
-        eS = exp(S);
-        meS = eS - 1;
-    }
-    else
-    {
-        eS = exp(-S);
-        meS = 1 - eS;
+	if (S < 0)
+	{
+		eS = exp(S);
+		meS = eS - 1;
+	}
+	else
+	{
+		eS = exp(-S);
+		meS = 1 - eS;
     }
 
     // expectation for SFS
@@ -779,33 +840,36 @@ double get_sel_expec_fix_sel(ParamsModel *pm, double S)
         // TODO if get nan's and weird behavior again, it could be from hyperg
         if (S < 0)
         {
-            // compute the hypergeometric functions
             hyper_corr = eS - gsl_sf_hyperg_1F1_int(pm->i + 1, pm->n, S);
         }
-        // eS != 0 is too restrictive, try meS != 1
         else if (meS != 1)
         {
-            // if eS is 0, the final value is 1, and it is already set to that
+        	// if eS is 0, the final value is 1, and it is already set to that
             hyper_corr = 1 - eS * gsl_sf_hyperg_1F1_int(pm->i + 1, pm->n, S);
         }
 
         double dnum = meS * (pm->i + 1) * (pm->n - (pm->i + 1));
         double corr = pm->theta_bar * pm->r[pm->inv_groups[pm->i]] * pm->n
-                        * hyper_corr / dnum;
+						* hyper_corr / dnum;
+
+        if (corr < 0)
+        {
+            fprintf(stderr,
+            		"Expectation is SFS is negative, i %d n %d S %g "
+            		"hyper geo %g denom %g\n",
+                    pm->i + 1, pm->n, S, hyper_corr, dnum);
+            exit(1);
+        }
+
         return (corr);
     }
 
-    double div = 0;
-
     // expectation for divergence
-    if (pm->div_flag == FALSE)
+    double div = S;
+
+    if (pm->div_flag == TRUE)
     {
-        // I do not account for miss-attributed polymorphism
-        div = S;
-    }
-    else
-    {
-        div = pm->lambda * S;
+        div *= pm->lambda;
 
         // add miss-attributed polymorphism
         // with r for divergence
@@ -823,9 +887,22 @@ double get_sel_expec_fix_sel(ParamsModel *pm, double S)
 
     if (S < 0)
     {
-        return (div * eS / meS);
+        div *= eS / meS;
     }
-    return (div / meS);
+    else
+    {
+    	div /= meS;
+    }
+
+    if (div < 0)
+	{
+		fprintf(stderr,
+				"Expectation for divergence is negative, n %d S %g div %g\n",
+				pm->n, S, div);
+		exit(1);
+	}
+
+    return (div);
 }
 
 double get_disp_ref_gamma(double S, void *pv)
@@ -1014,7 +1091,26 @@ int set_sel_expec(ParamsModel *pm, double **expec, unsigned negative_only)
 
         if (status != EXIT_SUCCESS)
         {
-            return (EXIT_FAILURE);
+            // try 2 step integration
+            // reset expectations to 0
+            set_to_zero(expec, pm->n);
+
+            xmax = xmin / 1000;
+            status = integrate_sel_expec(pm, no_expec, expec, 1 - p_b, xmin,
+                                         xmax, &get_integrand_disp_ref_gamma);
+            if (status != EXIT_SUCCESS)
+            {
+                return (EXIT_FAILURE);
+            }
+
+            xmin = xmax;
+            xmax = 0;
+            status = integrate_sel_expec(pm, no_expec, expec, 1 - p_b, xmin,
+                                         xmax, &get_integrand_disp_ref_gamma);
+            if (status != EXIT_SUCCESS)
+            {
+             	return (EXIT_FAILURE);
+            }
         }
 
         if (negative_only == FALSE)
@@ -1155,7 +1251,6 @@ double get_log_neg_bin(int x, double mu, double a)
 //        return (log(gsl_ran_poisson_pdf(x, mu)));
     }
 
-    // transform mu to probability
     if (x == 0)
     {
         return (a * (log(a) - log(a + mu)));

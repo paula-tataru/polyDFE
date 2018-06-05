@@ -55,5 +55,5 @@ all: $(OBJS)
 
 
 clean:
-	-$(RM) $(EXECUTABLES)$(OBJS)$(C_DEPS) polyDFE
+	-$(RM) $(EXECUTABLES) $(OBJS) $(C_DEPS) polyDFE
 	-@echo ' '

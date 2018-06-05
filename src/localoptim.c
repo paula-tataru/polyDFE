@@ -426,6 +426,9 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
         size += p->pm->sel;
     }
 
+    // before initialization, make sure the counter is 0!
+    p->counter = 0;
+
     gsl_vector *x = gsl_vector_alloc(size);
     gsl_vector *prev_x = gsl_vector_alloc(size);
     // store best solution found before restarting - to avoid looping
@@ -456,12 +459,15 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
     {
         status = FOUND_NAN;
     }
+
+    // set max counter to 1000
+    p->max_counter = 1000;
     for (iter = 1;
-                    iter <= po.max_iter
-                        && (status == GSL_CONTINUE
-                                        || status == RESTART
-                                        || status == MAX_LK);
-                    iter++, it++)
+                iter <= po.max_iter
+                    && (status == GSL_CONTINUE
+                                    || status == RESTART
+                                    || status == MAX_LK);
+                iter++, it++)
     {
         // check the running time
         end = clock();
@@ -476,6 +482,7 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
         // do optimization iteration
         // first, reset counter
         p->counter = 0;
+
         status = gsl_multimin_fdfminimizer_iterate(state);
         if (status == GSL_EBADFUNC)
         {
@@ -486,12 +493,13 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
         if (p->counter >= p->max_counter)
         {
             status = MAX_LK;
+            // re-evaluate the likelihood
+            state->f = get_lnL(state->x, p);
             // restart the optimization
             restart = TRUE;
         }
         else
         {
-
             // check if lk or gradient is nan
             grad = gsl_blas_dnrm2(state->gradient);
             if (is_nan(state->f) == TRUE || is_nan(grad) == TRUE)
@@ -500,6 +508,9 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
                 break;
             }
         }
+
+        // re-set max counter to 1000
+        p->max_counter = 1000;
 
         if (status)
         {
@@ -566,17 +577,24 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
 
         if (restart == TRUE)
         {
+            p->counter = 0;
+            // restart the optimization
+            // the gsl restart function does not seem to work properly
+            gsl_vector_memcpy(x, state->x);
+            // free state and reallocate it
+            gsl_multimin_fdfminimizer_free(state);
+            state = gsl_multimin_fdfminimizer_alloc(type, x->size);
+            gsl_multimin_fdfminimizer_set(state, &func, x, po.step_size, po.tol);
+            // if I am restarting because I reached MAX_LK
+            // then I increase the max counter
+            if (status == MAX_LK)
+            {
+                p->max_counter = 200 * size;
+                // though never set it to less than 1000
+                p->max_counter = p->max_counter < 1000 ? 1000 : p->max_counter;
+            }
             restart = FALSE;
             it = 0;
-            // restart the optimization
-            // the gsl restart function does not work on its own
-            gsl_vector_memcpy(x, state->x);
-            // recalculate likelihood
-            state->f = get_lnL(x, p);
-            gsl_multimin_fdfminimizer_set(state, &func, x,
-                                          po.step_size,
-                                          po.tol);
-            gsl_multimin_fdfminimizer_restart(state);
         }
     }
 
@@ -612,7 +630,7 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
     }
 
     // store best optimum found
-    get_lnL(state->x, p);
+    get_lnL(gsl_multimin_fdfminimizer_x(state), p);
     p->grad = gsl_blas_dnrm2(state->gradient);
 
     // free memory
@@ -620,6 +638,9 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
     gsl_vector_free(prev_x);
     gsl_vector_free(prev_restart_x);
     gsl_multimin_fdfminimizer_free(state);
+
+    // make sure the counter is reset to 0
+    p->counter = 0;
 
     return (EXIT_SUCCESS);
 }
