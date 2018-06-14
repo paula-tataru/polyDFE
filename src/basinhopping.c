@@ -185,10 +185,20 @@ int estimate_mut(Params *p, double *obs_r)
     if (p->pm->theta_bar_flag == TRUE)
     {
         p->pm->theta_bar = mut_mean;
+        // make sure it's positive
+        p->pm->theta_bar = p->pm->theta_bar > 0
+        		? p->pm->theta_bar
+				: (p->pm->theta_bar_min
+						+ (p->pm->theta_bar_max - p->pm->theta_bar_min) * 0.0001);
     }
     if (p->pm->a_flag == TRUE)
     {
         p->pm->a = mut_shape;
+    	// make sure it's positive
+    	p->pm->a = p->pm->a > 0
+    			? p->pm->a
+				: (p->pm->a_min
+						+ (p->pm->a_max - p->pm->a_min) * 0.0001);
     }
 
     // for some reason, (*obs_r) can be negative sometimes
@@ -264,6 +274,9 @@ int estimate_neut(Params *p)
             total = 0;
             while (j < p->pm->n - 1 && p->pm->inv_groups[j] == i)
             {
+                // r values can be negative sometimes
+            	// make sure they are 1 in that case
+            	obs_r[j] = obs_r[j] > 0 ? obs_r[j] : 1;
                 aux += obs_r[j];
                 total++;
                 j++;
@@ -304,6 +317,11 @@ int estimate_neut(Params *p)
             p->pm->lambda = p->pm->lambda / p->no_neut
                             - p->pm->theta_bar / p->pm->n;
         }
+        // make sure it's positive
+        p->pm->lambda = p->pm->lambda > 0
+                		? p->pm->lambda
+        				: (p->pm->lambda_min
+        						+ (p->pm->lambda_max - p->pm->lambda_min) * 0.0001);
     }
 
     free(obs_diff);

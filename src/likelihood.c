@@ -693,6 +693,14 @@ void set_neut_expec(ParamsModel pm, double **expec_neut)
     for (pm.i = 0; pm.i < pm.n; pm.i++)
     {
         (*expec_neut)[pm.i] = get_neut_expec(pm);
+        if ((*expec_neut)[pm.i] < 0)
+        {
+        	fprintf(stderr,
+        			"Negative neutral expectation i %d expec %g\n",
+					pm.i, (*expec_neut)[pm.i]);
+        	fprintf_params_model(pm, stdout, "--");
+        	exit(1);
+        }
     }
 }
 
