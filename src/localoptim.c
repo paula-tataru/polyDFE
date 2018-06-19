@@ -493,9 +493,6 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
         if (p->counter >= p->max_counter)
         {
             status = MAX_LK;
-            // re-evaluate the likelihood
-            state->f = get_lnL(state->x, p);
-            // restart the optimization
             restart = TRUE;
         }
         else
@@ -569,9 +566,16 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
                 status = RESTART;
             }
         }
-
+        
         if (p->verbose > 0 && iter % p->verbose == 0)
         {
+        	// if I had MAX_LK, I want to re-calculate the lk
+        	if (status == MAX_LK)
+        	{
+            	// re-evaluate the likelihood
+                p->counter = 0;
+                state->f = get_lnL(x, p);
+        	}
             print_result(*p->pm, FALSE, iter, state, status, s);
         }
 
@@ -597,6 +601,19 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
             it = 0;
         }
     }
+    
+    gsl_vector_memcpy(x, gsl_multimin_fdfminimizer_x(state));
+    // if I had MAX_LK, I want to re-calculate the lk and grad
+	if (status == MAX_LK)
+	{
+		p->counter = 0;
+		p->max_counter = 1000;
+		// free state and reallocate it
+		gsl_multimin_fdfminimizer_free(state);
+        state = gsl_multimin_fdfminimizer_alloc(type, x->size);
+        gsl_multimin_fdfminimizer_set(state, &func, x, po.step_size, po.tol);
+	}
+    get_lnL(x, p);
 
     print_result(*p->pm, FALSE, iter, state, status, s);
     if (iter > po.max_iter)
@@ -641,6 +658,7 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
 
     // make sure the counter is reset to 0
     p->counter = 0;
+    p->max_counter = 1000;
 
     return (EXIT_SUCCESS);
 }

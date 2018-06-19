@@ -77,12 +77,12 @@ int handle_status(int status, char *filename, int param)
                 // found wrong range
                 // don't do anything
                 // as the ranges are updated automatically
-//                int wrong = status / WRONG_RANGE;
-//                int line_no = status - WRONG_RANGE * wrong;
-//                fprintf(stderr,
-//                        "Line %d in file %s contains %d numbers that are "
-//                        "either invalid or outside permitted limits.\n",
-//                        line_no, filename, wrong);
+                int wrong = status / WRONG_RANGE;
+                int line_no = status - WRONG_RANGE * wrong;
+                fprintf(stderr,
+                        "Line %d in file %s contains %d numbers that are "
+                        "either invalid or outside permitted limits.\n",
+                        line_no, filename, wrong);
             }
             return (EXIT_FAILURE);
         }
