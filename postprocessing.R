@@ -578,10 +578,23 @@ altIntegrate = function(f, lower, upper, quantiles, ...)
     q = quantiles$q
     # sum up the probabilties for the quantiles that are between lower and upper
     pos = which(lower <= q & q <= upper)
+    if (length(pos) == 0)
+    {
+        return(0)
+    }
     # mid and prob i is for interval [i, i + 1]
     # that means that I always have to skip the last entry in pos
     pos = pos[-length(pos)]
-    value = sum(quantiles$p[pos] * f(quantiles$m[pos], ...))
+    # sometimes, f returns -Inf or NAN 
+    # and then the whole sum is -Inf / NAN
+    # I need to fix that and replace ir with 0
+    eval_f = f(quantiles$m[pos], ...)
+    j = which(eval_f == -Inf | is.na(eval_f))
+    if (length(j) > 0)
+    {
+        eval_f[j] = 0
+    }
+    value = sum(quantiles$p[pos] * eval_f)
     # now I have to deal with the cases where lower and upper
     # are found between quantiles and I need to split an interval
     if (lower > q[1] && !(lower %in% q))
@@ -589,14 +602,26 @@ altIntegrate = function(f, lower, upper, quantiles, ...)
         i = which(lower > q)
         i = length(i)
         prop = (q[i + 1] - lower) / (q[i + 1] - q[i])
-        value = value + prop * quantiles$p[i] * f(quantiles$m[i], ...)
+        eval_f = f(quantiles$m[i], ...)
+        j = which(eval_f == -Inf | is.na(eval_f))
+        if (length(j) > 0)
+        {
+            eval_f[j] = 0
+        }
+        value = value + prop * quantiles$p[i] * eval_f
     }
     if (upper < q[length(q)] && !(upper %in% q))
     {
         i = which(upper < q)
         i = i[1] - 1
         prop = (upper - q[i]) / (q[i + 1] - q[i])
-        value = value + prop * quantiles$p[i] * f(quantiles$m[i], ...)
+        eval_f = f(quantiles$m[i], ...)
+        j = which(eval_f == -Inf | is.na(eval_f))
+        if (length(j) > 0)
+        {
+            eval_f[j] = 0
+        }
+        value = value + prop * quantiles$p[i] * eval_f
     }
     
     return(value)
@@ -730,11 +755,17 @@ getModelName = function(estimates)
 		 	                    rep(1, length(pos)), 
 		 	                    check.attributes = FALSE)))
 	{
-		modelName = paste(modelName, "no r", sep = ", ")
+		modelName = paste(modelName, "- r")
+	} else
+	{
+	    modelName = paste(modelName, "+ r")
 	}
 	if (!"eps_an" %in% estimates$estimated && estimates$values["eps_an"] == 0)
 	{
-		modelName = paste(modelName, "no eps", sep = ", ")
+		modelName = paste(modelName, "- eps")
+	} else
+	{
+	    modelName = paste(modelName, "+ eps")
 	}
 	
 	return(modelName)
@@ -830,7 +861,7 @@ hasPosSel = function(est)
     values = est$values
 	if (model == 'A')
 	{
-		return(!(is.na(values['S_max'] || values['S_max'] == 0)))
+		return(!(is.na(values['S_max']) || values['S_max'] == 0))
 	}
 	if (model == 'B' || model == 'C')
 	{
