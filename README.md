@@ -30,7 +30,7 @@ Paula Tataru, paula.tataru at gmail . com
 
 
 # Requirements
-polyDFE can be ran using the provided pre-compiled binaries for Windows and Linux.
+polyDFE can be ran using the provided pre-compiled binaries for Windows, Linux and iOS.
 
 polyDFE is implemented in C and uses the GSL library. For compiling polyDFE, 
 the GSL library should be downloaded from https://www.gnu.org/software/gsl/ and 
