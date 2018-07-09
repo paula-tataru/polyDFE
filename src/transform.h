@@ -1,5 +1,5 @@
 /*
- * polyDFE v1.11: predicting DFE and alpha from polymorphism data
+ * polyDFE v2.0: predicting DFE and alpha from polymorphism data
  * Copyright (c) 2018  Paula Tataru
  *
  * This program is free software: you can redistribute it and/or modify
@@ -25,9 +25,9 @@
 
 #include "likelihood.h"
 
-void transform(gsl_vector **x, ParamsModel pm);
-void undo_transform(ParamsModel *pm, const gsl_vector *x);
+void transform(gsl_vector **x, ParamsShare ps);
+void undo_transform(ParamsShare *ps, const gsl_vector *x);
 
-void random_step(ParamsModel *pm, double step);
+void random_step(ParamsShare *ps, double step);
 
 #endif

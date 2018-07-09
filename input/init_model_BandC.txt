@@ -19,3 +19,8 @@
 # allow for ancestral error
 #ID   eps an    eps cont  lambda    theta bar  a      S d      b      p b      S b      r (at least #groups-1 of them)
 10    0 0.05    1 0.00    0 0.005   0 0.001    0 2    0 -400   0 0.4  0 0.02   0 4      1  1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+
+
+# sharing the DFE
+#ID   eps an    eps cont  lambda    theta bar  a      S d      b      p b      S b      r (at least #groups-1 of them)
+20    1 0.00    1 0.00    0 0.005   0 0.001    0 2    2 -400   2 0.4  2 0.02   2 4      0  1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1

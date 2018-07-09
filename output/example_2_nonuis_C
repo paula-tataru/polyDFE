@@ -1,77 +1,88 @@
 ---- Running command
----- ./polyDFE -d input/example_2 -i input/init_model_BandC.txt 4 
----- Performing inference on input/example_2 using model C
+---- ./polyDFE -d input/example_2 -i input/init_model_BandC.txt 4 -j 
+---- Performing inference using model C
+
+---- Performing inference on input/example_2
+----      with -i input/init_model_BandC.txt 4
+
 
 ---- Using provided initial values
 
+-- Starting local optimization
+-- Optimizing all parameters
+  it        lambda     theta_bar             a           S_d             b           p_b           S_b           ln lk          grad status 
+   0         0.005         0.001             2          -400           0.4          0.02             4 -3926.811608437 0.31430866655   -2 
+  95 0.00461617003 0.00095868134 1.98356835551 -212.15144511 0.43778225625 0.01674959727 4.86013166529 -3924.452625784 0.00008196356    0 
+
+---- Calculating initial values
 
 -- Starting local optimization
- it       lambda        theta_bar     a              S_d            b             p_b           S_b          ln lk             grad     status
-  0       0.00500       0.00100       2.00000     -400.00000       0.40000       0.02000       4.00000  -3926.8116113439      0.31820   -2
- 90       0.00462       0.00096       1.98355     -212.08836       0.43780       0.01674       4.86156  -3924.4526223615      0.00007    0
+-- Optimizing all parameters
+  it        lambda     theta_bar             a           S_d             b           p_b           S_b           ln lk          grad status 
+   0 0.00478932340       0.00086 1.70422760404        -80000         0.208           0.1            20 -4229.817658888 3.72630355724   -2 
+ 346 0.00461448774 0.00095873783 1.98363457565 -213.65794058 0.43600459531 0.01638387688 4.95768860700 -3924.452677073 0.00009663611    0 
 
+---- Best joint likelihood found -3924.452625784656902 with gradient 0.00008
 
----- Best joint likelihood found -3924.45262 with gradient 0.00007
--- Model: C
---     eps_an        eps_cont      lambda        theta_bar     a        
---    0.00e+00      0.00e+00       0.00462       0.00096       1.98355  
---      S_d            b             p_b           S_b      
---   -212.08836       0.43780       0.01674       4.86156  
---     r  2          r  3          r  4          r  5          r  6          r  7          r  8          r  9          r 10          r 11          r 12          r 13          r 14          r 15          r 16          r 17          r 18          r 19          r 20     
---     1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000       1.00000  
+---- Results for input/example_2 
+--  Model: C
+--        eps_an        lambda     theta_bar             a 
+--             0 0.00461617003 0.00095868134 1.98356835551 
+--           S_d             b           p_b           S_b 
+-- -212.15144511 0.43778225625 0.01674959727 4.86013166529 
+--           r 2           r 3           r 4           r 5           r 6           r 7           r 8           r 9          r 10          r 11          r 12          r 13          r 14          r 15          r 16          r 17          r 18          r 19          r 20 
+--             1             1             1             1             1             1             1             1             1             1             1             1             1             1             1             1             1             1             1 
 
 ---- Expected P_neut(i), 0 < i < n (neutral SFS per site) 
-E[P_neut(1)] = 0.000959
-E[P_neut(2)] = 0.000479
-E[P_neut(3)] = 0.000320
-E[P_neut(4)] = 0.000240
-E[P_neut(5)] = 0.000192
-E[P_neut(6)] = 0.000160
-E[P_neut(7)] = 0.000137
-E[P_neut(8)] = 0.000120
-E[P_neut(9)] = 0.000107
-E[P_neut(10)] = 0.000096
-E[P_neut(11)] = 0.000087
-E[P_neut(12)] = 0.000080
-E[P_neut(13)] = 0.000074
-E[P_neut(14)] = 0.000068
-E[P_neut(15)] = 0.000064
-E[P_neut(16)] = 0.000060
-E[P_neut(17)] = 0.000056
-E[P_neut(18)] = 0.000053
-E[P_neut(19)] = 0.000050
+E[P_neut(1)] = 0.0009586813
+E[P_neut(2)] = 0.0004793407
+E[P_neut(3)] = 0.0003195604
+E[P_neut(4)] = 0.0002396703
+E[P_neut(5)] = 0.0001917363
+E[P_neut(6)] = 0.0001597802
+E[P_neut(7)] = 0.0001369545
+E[P_neut(8)] = 0.0001198352
+E[P_neut(9)] = 0.0001065201
+E[P_neut(10)] = 0.0000958681
+E[P_neut(11)] = 0.0000871528
+E[P_neut(12)] = 0.0000798901
+E[P_neut(13)] = 0.0000737447
+E[P_neut(14)] = 0.0000684772
+E[P_neut(15)] = 0.0000639121
+E[P_neut(16)] = 0.0000599176
+E[P_neut(17)] = 0.0000563930
+E[P_neut(18)] = 0.0000532601
+E[P_neut(19)] = 0.0000504569
 
 ---- Expected P_sel(i), 0 < i < n (selected SFS per site) 
-E[P_sel(1)] = 0.000340
-E[P_sel(2)] = 0.000115
-E[P_sel(3)] = 0.000064
-E[P_sel(4)] = 0.000042
-E[P_sel(5)] = 0.000031
-E[P_sel(6)] = 0.000025
-E[P_sel(7)] = 0.000020
-E[P_sel(8)] = 0.000017
-E[P_sel(9)] = 0.000015
-E[P_sel(10)] = 0.000013
-E[P_sel(11)] = 0.000012
-E[P_sel(12)] = 0.000011
-E[P_sel(13)] = 0.000010
-E[P_sel(14)] = 0.000009
-E[P_sel(15)] = 0.000008
-E[P_sel(16)] = 0.000008
-E[P_sel(17)] = 0.000008
-E[P_sel(18)] = 0.000008
-E[P_sel(19)] = 0.000007
+E[P_sel(1)] = 0.0003395169
+E[P_sel(2)] = 0.0001153383
+E[P_sel(3)] = 0.0000635919
+E[P_sel(4)] = 0.0000424371
+E[P_sel(5)] = 0.0000313121
+E[P_sel(6)] = 0.0000245813
+E[P_sel(7)] = 0.0000201305
+E[P_sel(8)] = 0.0000170025
+E[P_sel(9)] = 0.0000147058
+E[P_sel(10)] = 0.0000129644
+E[P_sel(11)] = 0.0000116125
+E[P_sel(12)] = 0.0000105456
+E[P_sel(13)] = 0.0000096952
+E[P_sel(14)] = 0.0000090157
+E[P_sel(15)] = 0.0000084767
+E[P_sel(16)] = 0.0000080586
+E[P_sel(17)] = 0.0000077506
+E[P_sel(18)] = 0.0000075498
+E[P_sel(19)] = 0.0000074634
 
 ---- Expected D_neut and D_sel (neutral and selected divergence per site) 
-E[D_neut] = 0.004664
-E[D_sel] = 0.000786
+E[D_neut] = 0.0046641041
+E[D_sel] = 0.0007863427
 
 ---- Expected neutral and selected misattributed polymorphism per site
-E[mis_neut] = 0.000048
-E[mis_sel] = 0.000008
+E[mis_neut] = 0.0000479341
+E[mis_sel] = 0.0000075014
 
----- alpha_div = 0.491593
----- alpha_dfe = 0.508140
-
-
+---- alpha_div = 0.491624
+---- alpha_dfe = 0.508202
 

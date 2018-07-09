@@ -1,5 +1,5 @@
 /*
- * polyDFE v1.11: predicting DFE and alpha from polymorphism data
+ * polyDFE v2.0: predicting DFE and alpha from polymorphism data
  * Copyright (c) 2018  Paula Tataru and Marco A.P. Franco
  *
  * This program is free software: you can redistribute it and/or modify
@@ -29,6 +29,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <time.h>
+#include <string.h>
 
 #include "transform.h"
 
@@ -49,121 +50,213 @@ void initialize_params_optim(ParamsOptim *po)
     po->eps_abs = 0.0001;
     po->step_size = 2;
     po->tol = 0.1;
-    po->max_iter = 1500;
+    po->max_iter = 2000;
     po->minutes = 60;
+    po->grad_descent = TRUE;
 }
 
 /****************************************************************************
  * Functions for printing
  ****************************************************************************/
-void print_hearder_solution_neut(ParamsModel pm, int with_fixed, FILE *f)
+void print_header_solution_neut(ParamsModel pm, int i, int with_fixed, FILE *f, int flag)
 {
-    if (pm.eps_an_flag == TRUE || with_fixed == TRUE)
+    char extra[10] = "";
+    if (i >= 0)
     {
-        fprintf(f, "%10.10s ", "eps_an");
+        sprintf(extra, "%d ", i);
     }
-    if ((pm.lambda_flag == TRUE || with_fixed == TRUE) && pm.div_flag == TRUE)
+    char str[20];
+
+    if (pm.eps_an_flag == flag
+    		|| (with_fixed == TRUE && pm.eps_an_flag != SHARED))
     {
-        fprintf(f, "%10.10s ", "lambda");
+        strcpy(str, extra);
+        strcat(str, "eps_an");
+        fprintf(f, "%13.13s ", str);
     }
-    if (pm.theta_bar_flag == TRUE || with_fixed == TRUE)
+    if ((pm.lambda_flag == flag
+    		|| (with_fixed == TRUE && pm.lambda_flag != SHARED)) && pm.div_flag == TRUE)
     {
-        fprintf(f, "%10.10s ", "theta_bar");
+        strcpy(str, extra);
+        strcat(str, "lambda");
+        fprintf(f, "%13.13s ", str);
     }
-    if (pm.a_flag == TRUE || with_fixed == TRUE)
+    if (pm.theta_bar_flag == flag
+    		|| (with_fixed == TRUE && pm.theta_bar_flag != SHARED))
     {
-        fprintf(f, "%10.10s ", "a");
+        strcpy(str, extra);
+        strcat(str, "theta_bar");
+        fprintf(f, "%13.13s ", str);
+    }
+    if (pm.a_flag == flag
+    		|| (with_fixed == TRUE && pm.a_flag != SHARED))
+    {
+        strcpy(str, extra);
+        strcat(str, "a");
+        fprintf(f, "%13.13s ", str);
     }
 }
 
-void print_hearder_solution_demo(ParamsModel pm, int with_fixed, FILE *f)
+void print_header_solution_demo(ParamsModel pm, int i, int with_fixed, FILE *f, int flag)
 {
-    unsigned i = 0;
-    if (pm.r_flag == TRUE || with_fixed == TRUE)
+    char extra[10] = "";
+    if (i >= 0)
     {
-        for (i = 1; i < pm.no_groups; i++)
-        {
-            fprintf(f, "%7s%3d ", "r", i + 1);
-        }
+        sprintf(extra, "%d ", i);
+    }
+    char str[20];
+
+    unsigned j = 0;
+    if (pm.r_flag == flag
+    		|| (with_fixed == TRUE && pm.r_flag != SHARED))
+    {
+    	// print the group for each r parameter
+    	int curr_r = 1;
+    	for (j = 2; j <= pm.no_r; j++)
+    	{
+    		if (pm.inv_groups[curr_r] != pm.inv_groups[j])
+    		{
+    			strcpy(str, extra);
+    			if (curr_r + 1 != j)
+    			{
+    				sprintf(str, "%s%s %d-%d", extra, "r", curr_r + 1, j);
+    			}
+    			else
+    			{
+    				sprintf(str, "%s%s %d", extra, "r", curr_r + 1);
+    			}
+    			fprintf(f, "%13.13s ", str);
+    			curr_r = j;
+    		}
+    	}
+//        for (j = 1; j < pm.no_groups; j++)
+//        {
+//            strcpy(str, extra);
+//            sprintf(str, "%s%s%3d", extra, "r", j + 1);
+//            fprintf(f, "%13.13s ", str);
+//        }
     }
 }
 
-void print_hearder_solution_sel(ParamsModel pm, int with_fixed, FILE *f)
+void print_header_solution_sel(ParamsModel pm, int i, int with_fixed, FILE *f, int flag)
 {
-    unsigned i = 0;
+    char extra[10] = "";
+    if (i >= 0)
+    {
+        sprintf(extra, "%d ", i);
+    }
+    char str[20];
+    unsigned j = 0;
 
     switch (pm.model)
     {
         case 1:
         {
-            if (pm.sel_flag[0] == TRUE || with_fixed == TRUE)
+            if (pm.sel_flag[0] == flag
+            		|| (with_fixed == TRUE && pm.sel_flag[0] != SHARED))
             {
-                fprintf(f, "%10.10s ", "S_bar");
+                strcpy(str, extra);
+                strcat(str, "S_bar");
+                fprintf(f, "%13.13s ", str);
             }
-            if (pm.sel_flag[1] == TRUE || with_fixed == TRUE)
+            if (pm.sel_flag[1] == flag
+            		|| (with_fixed == TRUE && pm.sel_flag[1] != SHARED))
             {
-                fprintf(f, "%10.10s ", "b");
+                strcpy(str, extra);
+                strcat(str, "b");
+                fprintf(f, "%13.13s ", str);
             }
-            if (pm.sel_flag[2] == TRUE || with_fixed == TRUE)
+            if (pm.sel_flag[2] == flag
+            		|| (with_fixed == TRUE && pm.sel_flag[2] != SHARED))
             {
-                fprintf(f, "%10.10s ", "S_max");
+                strcpy(str, extra);
+                strcat(str, "S_max");
+                fprintf(f, "%13.13s ", str);
             }
             break;
         }
         case 2:
         {
-            if (pm.sel_flag[0] == TRUE || with_fixed == TRUE)
+            if (pm.sel_flag[0] == flag
+            		|| (with_fixed == TRUE && pm.sel_flag[0] != SHARED))
             {
-                fprintf(f, "%10.10s ", "S_d");
+                strcpy(str, extra);
+                strcat(str, "S_d");
+                fprintf(f, "%13.13s ", str);
             }
-            if (pm.sel_flag[1] == TRUE || with_fixed == TRUE)
+            if (pm.sel_flag[1] == flag
+            		|| (with_fixed == TRUE && pm.sel_flag[1] != SHARED))
             {
-                fprintf(f, "%10.10s ", "b");
+                strcpy(str, extra);
+                strcat(str, "b");
+                fprintf(f, "%13.13s ", str);
             }
-            if (pm.sel_flag[2] == TRUE || with_fixed == TRUE)
+            if (pm.sel_flag[2] == flag
+            		|| (with_fixed == TRUE && pm.sel_flag[2] != SHARED))
             {
-                fprintf(f, "%10.10s ", "p_b");
+                strcpy(str, extra);
+                strcat(str, "p_b");
+                fprintf(f, "%13.13s ", str);
             }
-            if (pm.sel_flag[3] == TRUE || with_fixed == TRUE)
+            if (pm.sel_flag[3] == flag
+            		|| (with_fixed == TRUE && pm.sel_flag[3] != SHARED))
             {
-                fprintf(f, "%10.10s ", "S_b");
+                strcpy(str, extra);
+                strcat(str, "S_b");
+                fprintf(f, "%13.13s ", str);
             }
             break;
         }
         case 3:
         {
-            if (pm.sel_flag[0] == TRUE || with_fixed == TRUE)
+            if (pm.sel_flag[0] == flag
+            		|| (with_fixed == TRUE && pm.sel_flag[0] != SHARED))
             {
-                fprintf(f, "%10.10s ", "S_d");
+                strcpy(str, extra);
+                strcat(str, "S_d");
+                fprintf(f, "%13.13s ", str);
             }
-            if (pm.sel_flag[1] == TRUE || with_fixed == TRUE)
+            if (pm.sel_flag[1] == flag
+            		|| (with_fixed == TRUE && pm.sel_flag[1] != SHARED))
             {
-                fprintf(f, "%10.10s ", "b");
+                strcpy(str, extra);
+                strcat(str, "b");
+                fprintf(f, "%13.13s ", str);
             }
-            if (pm.sel_flag[2] == TRUE || with_fixed == TRUE)
+            if (pm.sel_flag[2] == flag
+            		|| (with_fixed == TRUE && pm.sel_flag[2] != SHARED))
             {
-                fprintf(f, "%10.10s ", "p_b");
+                strcpy(str, extra);
+                strcat(str, "p_b");
+                fprintf(f, "%13.13s ", str);
             }
-            if (pm.sel_flag[3] == TRUE || with_fixed == TRUE)
+            if (pm.sel_flag[3] == flag
+            		|| (with_fixed == TRUE && pm.sel_flag[3] != SHARED))
             {
-                fprintf(f, "%10.10s ", "S_b");
+                strcpy(str, extra);
+                strcat(str, "S_b");
+                fprintf(f, "%13.13s ", str);
             }
             break;
         }
         case 4:
         {
-            for (i = 0; i < pm.no_sel/2; i++)
+            for (j = 0; j < pm.no_sel/2; j++)
             {
-                if (pm.sel_flag[2*i+1] != FALSE || with_fixed == TRUE)
+                if (pm.sel_flag[2*j+1] == flag
+                		|| (with_fixed == TRUE && pm.sel_flag[2*j+1] != SHARED))
                 {
-                    if ((int) pm.sel_params[2*i] == pm.sel_params[2*i])
+                    strcpy(str, extra);
+                    sprintf(str, "%s%s", extra, "S_p");
+                    if ((int) pm.sel_params[2*j] == pm.sel_params[2*j])
                     {
-                        fprintf(f, "%6s%4d ", "S_p", (int) pm.sel_params[2*i]);
+                        sprintf(str, "%s%4d", str, (int) pm.sel_params[2*j]);
                     }
                     else
                     {
-                        fprintf(f, "%6s%2.2g ", "S_p", pm.sel_params[2*i]);
+                        sprintf(str, "%s%2.2g", str, pm.sel_params[2*j]);
                     }
+                    fprintf(f, "%13.13s ", str);
                 }
             }
             break;
@@ -171,27 +264,98 @@ void print_hearder_solution_sel(ParamsModel pm, int with_fixed, FILE *f)
     }
 }
 
-void print_hearder_solution(ParamsModel pm, int with_fixed)
+void print_header_solution(ParamsModel pm, int i, int with_fixed, int flag,
+                           int neut_ln, int sel_ln)
 {
-    if (pm.neut_ln == TRUE)
+    if (neut_ln == TRUE)
     {
-        print_hearder_solution_neut(pm, with_fixed, stdout);
+        print_header_solution_neut(pm, i, with_fixed, stdout, flag);
     }
-    if (pm.sel_ln == TRUE)
+    if (sel_ln == TRUE)
     {
-            print_hearder_solution_sel(pm, with_fixed, stdout);
+            print_header_solution_sel(pm, i, with_fixed, stdout, flag);
     }
-    if (pm.neut_ln == TRUE)
+    if (neut_ln == TRUE)
     {
-        print_hearder_solution_demo(pm, with_fixed, stdout);
+        print_header_solution_demo(pm, i, with_fixed, stdout, flag);
     }
 }
 
-void print_header_result(ParamsModel pm, int with_fixed)
+void print_header_result(ParamsShare ps, int with_fixed, int grad_descent)
 {
-    printf("%4s ", "it");
-    print_hearder_solution(pm, with_fixed);
-    printf("%15.15s %10.10s %4s \n",  "ln lk", "grad", "status");
+    unsigned i = 0;
+
+    // I only print the iter for SHARED
+    // and the lk, grad, status for TRUE
+	printf("%4s ", "it");
+	// if I am running on just one file, do not use i
+	if (ps.no_data == 1)
+	{
+		print_header_solution(*ps.p[0].pm, -1, with_fixed, SHARED,
+							  ps.use_neut_ln, ps.use_sel_ln);
+	}
+	else
+	{
+		print_header_solution(*ps.p[ps.which_r].pm, 0, with_fixed, SHARED,
+							  ps.use_neut_ln, ps.use_sel_ln);
+	}
+
+	// if I am running on just one file, do not use i
+	if (ps.no_data == 1)
+	{
+		print_header_solution(*ps.p[0].pm, -1, with_fixed, TRUE,
+							  ps.use_neut_ln, ps.use_sel_ln);
+	}
+	else
+	{
+		if (ps.which == -1)
+		{
+			for (i = 0; i < ps.no_data; i++)
+					{
+						print_header_solution(*ps.p[i].pm, i + 1, with_fixed, TRUE,
+											  ps.use_neut_ln, ps.use_sel_ln);
+					}
+		}
+		else
+		{
+			print_header_solution(*ps.p[ps.which].pm, ps.which + 1, with_fixed, TRUE,
+								  ps.use_neut_ln, ps.use_sel_ln);
+		}
+	}
+	printf("%15.15s ",  "ln lk");
+	if (grad_descent == TRUE)
+	{
+		printf("%13.13s ", "grad");
+	}
+	else
+	{
+		printf("%13.13s ", "size");
+	}
+	printf("%4s \n", "status");
+}
+
+char *removeTrailingZeros(char *s)
+{
+    int len = strlen(s);
+
+    // remove trailling zeros
+    // only if s contains '.'
+    char *p = strchr (s,'.');
+    if (p != NULL)
+    {
+        while (len > 0 && s[len - 1] == '0')
+        {
+            len--;
+            s[len] = '\0';
+        }
+        // if all decimals were zeros, remove "."
+        if (s[len - 1] == '.')
+        {
+            s[len - 1] = '\0';
+        }
+    }
+
+    return (s);
 }
 
 void print_with_space(char **s, double x, FILE *f, int small)
@@ -202,7 +366,7 @@ void print_with_space(char **s, double x, FILE *f, int small)
     }
     else
     {
-        sprintf((*s), "%10.10f", x);
+        sprintf((*s), "%13.13f", x);
     }
 
     if (small == TRUE)
@@ -211,51 +375,45 @@ void print_with_space(char **s, double x, FILE *f, int small)
     }
     else if (small == FALSE)
     {
-        fprintf(f, "%10.10s ", *s);
+        fprintf(f, "%13.13s ", removeTrailingZeros(*s));
     }
     else
     {
         // large space for likelihood
-        fprintf(f, "%15.15s ", *s);
+        fprintf(f, "%15.15s ", removeTrailingZeros(*s));
     }
 }
 
-void print_solution_neut(ParamsModel pm, int with_fixed, gsl_vector *x, char *s,
-                         FILE *f)
+void print_solution_neut(ParamsModel pm, int with_fixed, char *s, FILE *f, int flag)
 {
-    if (x)
-    {
-        undo_transform(&pm, x);
-    }
-
-    if (pm.eps_an_flag == TRUE || with_fixed == TRUE)
+    if (pm.eps_an_flag == flag
+    		|| (with_fixed == TRUE && pm.eps_an_flag != SHARED))
     {
         print_with_space(&s, pm.eps_an, f, FALSE);
     }
-    if ((pm.lambda_flag == TRUE || with_fixed == TRUE) && pm.div_flag == TRUE)
+    if ((pm.lambda_flag == flag
+    		|| (with_fixed == TRUE && pm.lambda_flag != SHARED)) && pm.div_flag == TRUE)
     {
         print_with_space(&s, pm.lambda, f, FALSE);
     }
-    if (pm.theta_bar_flag == TRUE || with_fixed == TRUE)
+    if (pm.theta_bar_flag == flag
+    		|| (with_fixed == TRUE && pm.theta_bar_flag != SHARED))
     {
         print_with_space(&s, pm.theta_bar, f, FALSE);
     }
-    if (pm.a_flag == TRUE || with_fixed == TRUE)
+    if (pm.a_flag == flag
+    		|| (with_fixed == TRUE && pm.a_flag != SHARED))
     {
         print_with_space(&s, pm.a, f, FALSE);
     }
 }
 
-void print_solution_demo(ParamsModel pm, int with_fixed, gsl_vector *x, char *s,
-                         FILE *f)
+void print_solution_demo(ParamsModel pm, int with_fixed, char *s, FILE *f, int flag)
 {
     unsigned i = 0;
-    if (x)
-    {
-        undo_transform(&pm, x);
-    }
 
-    if (pm.r_flag == TRUE || with_fixed == TRUE)
+    if (pm.r_flag == flag
+    		|| (with_fixed == TRUE && pm.r_flag != SHARED))
     {
         // r[0] should always be 1
         for (i = 1; i < pm.no_groups; i++)
@@ -265,20 +423,16 @@ void print_solution_demo(ParamsModel pm, int with_fixed, gsl_vector *x, char *s,
     }
 }
 
-void print_solution_sel(ParamsModel pm, int with_fixed, gsl_vector *x, char *s,
-                        FILE *f)
+void print_solution_sel(ParamsModel pm, int with_fixed, char *s, FILE *f, int flag)
 {
     unsigned i = 0;
-    if (x)
-    {
-        undo_transform(&pm, x);
-    }
 
     if (pm.model < 4)
     {
         for (i = 0; i < pm.no_sel; i++)
         {
-            if (pm.sel_flag[i] == TRUE || with_fixed == TRUE)
+            if (pm.sel_flag[i] == flag
+            		|| (with_fixed == TRUE && pm.sel_flag[i] != SHARED))
             {
                 print_with_space(&s, pm.sel_params[i], f, FALSE);
             }
@@ -288,7 +442,8 @@ void print_solution_sel(ParamsModel pm, int with_fixed, gsl_vector *x, char *s,
     {
         for (i = 0; i < pm.no_sel/2; i++)
         {
-            if (pm.sel_flag[2*i+1] != FALSE || with_fixed == TRUE)
+            if (pm.sel_flag[2*i+1] == flag
+            		|| (with_fixed == TRUE && pm.sel_flag[2*i+1] != SHARED))
             {
                 print_with_space(&s, pm.sel_params[2*i+1], f, FALSE);
             }
@@ -296,48 +451,95 @@ void print_solution_sel(ParamsModel pm, int with_fixed, gsl_vector *x, char *s,
     }
 }
 
-void print_solution(ParamsModel pm, int with_fixed, gsl_vector *x, char *s)
+void print_solution(ParamsModel pm, int with_fixed, char *s, int flag,
+                    int neut_ln, int sel_ln)
 {
-    if (pm.neut_ln == TRUE)
+    if (neut_ln == TRUE)
     {
-            print_solution_neut(pm, with_fixed, x, s, stdout);
+            print_solution_neut(pm, with_fixed, s, stdout, flag);
     }
-    if (pm.sel_ln == TRUE)
+    if (sel_ln == TRUE)
     {
-            print_solution_sel(pm, with_fixed, x, s, stdout);
+            print_solution_sel(pm, with_fixed, s, stdout, flag);
     }
-    if (pm.neut_ln == TRUE)
+    if (neut_ln == TRUE)
     {
-        print_solution_demo(pm, with_fixed, x, s, stdout);
+        print_solution_demo(pm, with_fixed, s, stdout, flag);
     }
 }
 
-void print_result(ParamsModel pm, int with_fixed, int iter,
-                  gsl_multimin_fdfminimizer *state, int status, char *s)
+void print_result(ParamsShare ps, int with_fixed, int iter,
+		          int status, char *s, double f, double grad)
 {
-    double grad = gsl_blas_dnrm2(state->gradient);
+    unsigned i = 0;
+
+    // I only print the iter for SHARED
+    // and the lk, grad, status for TRUE
     print_with_space(&s, iter, stdout, TRUE);
-    print_solution(pm, with_fixed, state->x, s);
-    // print nan if necessary
-    if (is_nan(state->f) == FALSE)
-    {
-        print_with_space(&s, -state->f, stdout, -200);
-        // print nan if necessary
-		if (is_nan(grad) == FALSE)
+	print_solution(*ps.p[ps.which_r].pm, with_fixed, s, SHARED,
+				   ps.use_neut_ln, ps.use_sel_ln);
+
+	if (ps.which == -1)
+	{
+		for (i = 0; i < ps.no_data; i++)
 		{
-			print_with_space(&s, grad, stdout, FALSE);
+			print_solution(*ps.p[i].pm, with_fixed, s, TRUE,
+					ps.use_neut_ln, ps.use_sel_ln);
 		}
-		else
-		{
-			printf("%10.10s ", "NAN");
-		}
-    }
-    else
-    {
-        printf("%10.10s %10.10s ", "NAN", "NAN");
-    }
-    print_with_space(&s, status, stdout, TRUE);
-    printf("\n");
+	}
+	else
+	{
+		print_solution(*ps.p[ps.which].pm, with_fixed, s, TRUE,
+					   ps.use_neut_ln, ps.use_sel_ln);
+	}
+
+	// print lk
+	if (is_nan(f) == FALSE)
+	{
+		print_with_space(&s, -f, stdout, -200);
+	}
+	else
+	{
+		printf("%15.15s ", "NAN");
+	}
+
+	// print grad
+	if (is_nan(grad) == FALSE)
+	{
+		print_with_space(&s, grad, stdout, FALSE);
+	}
+	else
+	{
+		printf("%13.13s ", "NAN");
+	}
+
+	print_with_space(&s, status, stdout, TRUE);
+	printf("\n");
+}
+
+void print_result_gen(ParamsShare ps, int with_fixed, int iter, void *state,
+		          int status, char *s, int grad_descent)
+{
+	// call print_result with the right arguments
+	// according to the type of optimization
+	double f = 0;
+	double grad = -1;
+	if (grad_descent == TRUE)
+	{
+		f = ((gsl_multimin_fdfminimizer *) state)->f;
+		grad = gsl_blas_dnrm2(((gsl_multimin_fdfminimizer *) state)->gradient);
+		// make sure ps contains the correct values
+		undo_transform(&ps, ((gsl_multimin_fdfminimizer *) state)->x);
+	}
+	else
+	{
+		f = ((gsl_multimin_fminimizer *) state)->fval;
+		// the gradient now contains the size
+		grad = gsl_multimin_fminimizer_size(state);
+		// make sure ps contains the correct values
+		undo_transform(&ps, ((gsl_multimin_fminimizer *) state)->x);
+	}
+	print_result(ps, with_fixed, iter, status, s, f, grad);
 }
 
 /****************************************************************************
@@ -345,7 +547,7 @@ void print_result(ParamsModel pm, int with_fixed, int iter,
  ****************************************************************************/
 int set_lnL_f(const gsl_vector *x, void *pv, gsl_vector *f)
 {
-    gsl_vector_set(f, 0, get_lnL(x, pv));
+    gsl_vector_set(f, 0, get_lnL_share(x, pv));
     return (GSL_SUCCESS);
 }
 
@@ -393,17 +595,16 @@ void set_lnL_df(const gsl_vector *x, void *pv, gsl_vector *df)
 
 void set_lnL_fdf(const gsl_vector *x, void *pv, double *f, gsl_vector *df)
 {
-    *f = get_lnL(x, pv);
+    *f = get_lnL_share(x, pv);
     set_lnL_df(x, pv, df);
 }
 
-int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
-                        ParamsOptim po, Params *p, char *s)
+int optimize_partial_ln(const void *type,
+                        ParamsOptim po, ParamsShare *ps, char *s)
 {
-    // I optimize either the neutral of the selected likelihood
+	// I optimize either the neutral of the selected likelihood
     unsigned iter = 0;
     unsigned it = 0;
-    double grad = 0;
 
     // keep time of the running time
     // and stop when I exceed the allowed minutes
@@ -417,17 +618,31 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
     int same_state = 0;
 
     int size = 0;
-    if (p->pm->neut_ln == TRUE)
+    if (ps->use_neut_ln == TRUE)
     {
-        size += p->pm->neut;
+    	if (ps->which == -1)
+    	{
+    		size += ps->neut;
+    	}
+    	else
+    	{
+    		size += ps->p[ps->which].pm->neut;
+    	}
     }
-    if (p->pm->sel_ln == TRUE)
+    if (ps->use_sel_ln == TRUE)
     {
-        size += p->pm->sel;
+    	if (ps->which == -1)
+		{
+			size += ps->sel;
+		}
+		else
+		{
+			size += ps->p[ps->which].pm->sel;
+		}
     }
 
     // before initialization, make sure the counter is 0!
-    p->counter = 0;
+    ps->counter = 0;
 
     gsl_vector *x = gsl_vector_alloc(size);
     gsl_vector *prev_x = gsl_vector_alloc(size);
@@ -435,33 +650,66 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
     gsl_vector *prev_restart_x = gsl_vector_alloc(size);
 
     // initialize x
-    transform(&x, *p->pm);
+    transform(&x, *ps);
     gsl_vector_memcpy(prev_x, x);
     gsl_vector_memcpy(prev_restart_x, x);
 
-    gsl_multimin_function_fdf func;
-    func.n = x->size;
-    func.f = &get_lnL;
-    func.df = &set_lnL_df;
-    func.fdf = &set_lnL_fdf;
-    func.params = (void *) p;
-
-    // initialize state
-    gsl_multimin_fdfminimizer *state = gsl_multimin_fdfminimizer_alloc(type,
-                                                                       x->size);
-    gsl_multimin_fdfminimizer_set(state, &func, x, po.step_size, po.tol);
-
-    print_header_result(*p->pm, FALSE);
-    print_result(*p->pm, FALSE, 0, state, status, s);
-
-    // do not start if lk is nan
-    if (is_nan(state->f) == TRUE)
+    // depending on the type of optimization,
+    // I have to use different functions from GSL
+    void *state = NULL;
+    void *func = NULL;
+    gsl_vector *step_size = NULL;
+    if (po.grad_descent == TRUE)
     {
-        status = FOUND_NAN;
+    	func = malloc(sizeof(gsl_multimin_function_fdf));
+    	((gsl_multimin_function_fdf *) func)->n = x->size;
+    	((gsl_multimin_function_fdf *) func)->f = &get_lnL_share;
+    	((gsl_multimin_function_fdf *) func)->df = &set_lnL_df;
+    	((gsl_multimin_function_fdf *) func)->fdf = &set_lnL_fdf;
+    	((gsl_multimin_function_fdf *) func)->params = (void *) ps;
+
+    	// initialize state
+		state = gsl_multimin_fdfminimizer_alloc(type, x->size);
+		gsl_multimin_fdfminimizer_set(state, func, x, po.step_size, po.tol);
+    }
+    else
+    {
+    	func = malloc(sizeof(gsl_multimin_function));
+    	((gsl_multimin_function *) func)->n = x->size;
+    	((gsl_multimin_function *) func)->f = &get_lnL_share;
+    	((gsl_multimin_function *) func)->params = (void *) ps;
+
+    	// initialize state
+		state = gsl_multimin_fminimizer_alloc(type, x->size);
+		gsl_vector *step_size = gsl_vector_alloc(x->size);
+		gsl_vector_set_all(step_size, po.step_size);
+		gsl_multimin_fminimizer_set(state, func, x, step_size);
+		// set the initial value of the function
+		((gsl_multimin_fminimizer *) state)->fval = get_lnL_share(x, ps);
     }
 
+    print_header_result(*ps, FALSE, po.grad_descent);
+    print_result_gen(*ps, FALSE, 0, state, status, s, po.grad_descent);
+
+    // do not start if lk is nan
+    if (po.grad_descent == TRUE)
+    {
+    	if (is_nan(((gsl_multimin_fdfminimizer *) state)->f) == TRUE)
+    	{
+    		status = FOUND_NAN;
+    	}
+    }
+    else
+    {
+    	if (is_nan(((gsl_multimin_fminimizer *) state)->fval) == TRUE)
+    	{
+    		status = FOUND_NAN;
+    	}
+    }
+
+    // TODO
     // set max counter to 1000
-    p->max_counter = 1000;
+    ps->max_counter = 1000;
     for (iter = 1;
                 iter <= po.max_iter
                     && (status == GSL_CONTINUE
@@ -481,33 +729,63 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
 
         // do optimization iteration
         // first, reset counter
-        p->counter = 0;
+        ps->counter = 0;
 
-        status = gsl_multimin_fdfminimizer_iterate(state);
+        if (po.grad_descent == TRUE)
+        {
+        	status = gsl_multimin_fdfminimizer_iterate(state);
+        }
+        else
+        {
+        	status = gsl_multimin_fminimizer_iterate(state);
+        }
+
         if (status == GSL_EBADFUNC)
         {
             break;
         }
 
         // check the counter
-        if (p->counter >= p->max_counter)
+        if (ps->counter >= ps->max_counter)
         {
-            status = MAX_LK;
+        	status = MAX_LK;
             restart = TRUE;
         }
         else
         {
             // check if lk or gradient is nan
-            grad = gsl_blas_dnrm2(state->gradient);
-            if (is_nan(state->f) == TRUE || is_nan(grad) == TRUE)
-            {
-                status = FOUND_NAN;
-                break;
-            }
+        	if (po.grad_descent == TRUE)
+        	{
+        		ps->criteria = gsl_blas_dnrm2(((gsl_multimin_fdfminimizer *) state)->gradient);
+        		if (is_nan(((gsl_multimin_fdfminimizer *) state)->f) == TRUE
+        				|| is_nan(ps->criteria) == TRUE)
+        		{
+        			status = FOUND_NAN;
+        			break;
+        		}
+        	}
+        	else
+        	{
+        		if (is_nan(((gsl_multimin_fminimizer *) state)->fval) == TRUE)
+        		{
+        			status = FOUND_NAN;
+        			break;
+        		}
+        	}
         }
 
+        // copy current solution to x
+        if (po.grad_descent == TRUE)
+		{
+			gsl_vector_memcpy(x, ((gsl_multimin_fdfminimizer *) state)->x);
+		}
+		else
+		{
+			gsl_vector_memcpy(x, ((gsl_multimin_fminimizer *) state)->x);
+		}
+
         // re-set max counter to 1000
-        p->max_counter = 1000;
+        ps->max_counter = 1000;
 
         if (status)
         {
@@ -515,8 +793,7 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
             // check if current solution
             // is different than previously found solution
             // but it took at least one optimizing cycle
-            if (gsl_vector_equal(prev_restart_x, state->x) && it != 1
-                            && status != MAX_LK)
+            if (gsl_vector_equal(prev_restart_x, x) && it != 1 && status != MAX_LK)
             {
                 // they're equal, stop optimization
                 status = SAME_STATE_CIR;
@@ -524,7 +801,7 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
             }
             else
             {
-                gsl_vector_memcpy(prev_restart_x, state->x);
+                gsl_vector_memcpy(prev_restart_x, x);
             }
             restart = TRUE;
         }
@@ -532,7 +809,17 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
         // test for convergence
         if (status != MAX_LK)
         {
-            status = gsl_multimin_test_gradient(state->gradient, po.eps_abs);
+        	if (po.grad_descent == TRUE)
+        	{
+        		status = gsl_multimin_test_gradient(
+							((gsl_multimin_fdfminimizer *) state)->gradient,
+							po.eps_abs);
+        	}
+        	else
+        	{
+        		status = gsl_multimin_test_size(
+        				gsl_multimin_fminimizer_size(state), po.eps_abs);
+        	}
             if (status == GSL_SUCCESS)
             {
                 break;
@@ -540,7 +827,9 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
         }
 
         // test if new solution is different than previous solution
-        if (gsl_vector_equal(prev_x, state->x))
+        // for simplex, they can be the same for some reason,
+        // but the algorithm still progresses
+        if (po.grad_descent == TRUE && gsl_vector_equal(prev_x, x))
         {
             restart = TRUE;
             same_state++;
@@ -555,7 +844,7 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
         }
         else
         {
-            gsl_vector_memcpy(prev_x, state->x);
+            gsl_vector_memcpy(prev_x, x);
             same_state = 0;
         }
 
@@ -566,56 +855,107 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
                 status = RESTART;
             }
         }
-        
-        if (p->verbose > 0 && iter % p->verbose == 0)
+
+        if (ps->verbose > 0 && iter % ps->verbose == 0)
         {
         	// if I had MAX_LK, I want to re-calculate the lk
         	if (status == MAX_LK)
         	{
             	// re-evaluate the likelihood
-                p->counter = 0;
-                state->f = get_lnL(x, p);
+                ps->counter = 0;
+                if (po.grad_descent == TRUE)
+                {
+                	((gsl_multimin_fdfminimizer *) state)->f = get_lnL_share(x, ps);
+                }
+                else
+                {
+                	((gsl_multimin_fminimizer *) state)->fval = get_lnL_share(x, ps);
+                }
+
         	}
-            print_result(*p->pm, FALSE, iter, state, status, s);
+            print_result_gen(*ps, FALSE, iter, state, status, s, po.grad_descent);
         }
 
         if (restart == TRUE)
         {
-            p->counter = 0;
+            ps->counter = 0;
             // restart the optimization
             // the gsl restart function does not seem to work properly
-            gsl_vector_memcpy(x, state->x);
             // free state and reallocate it
-            gsl_multimin_fdfminimizer_free(state);
-            state = gsl_multimin_fdfminimizer_alloc(type, x->size);
-            gsl_multimin_fdfminimizer_set(state, &func, x, po.step_size, po.tol);
+            if (po.grad_descent)
+            {
+            	gsl_multimin_fdfminimizer_free(state);
+				state = gsl_multimin_fdfminimizer_alloc(type, x->size);
+				gsl_multimin_fdfminimizer_set(state, func, x, po.step_size, po.tol);
+            }
+            else
+            {
+            	gsl_multimin_fminimizer_free(state);
+            	state = gsl_multimin_fminimizer_alloc(type, x->size);
+				step_size = gsl_vector_alloc(x->size);
+				gsl_vector_set_all(step_size, po.step_size);
+				gsl_multimin_fminimizer_set(state, func, x, step_size);
+				// set the initial value of the function
+				((gsl_multimin_fminimizer *) state)->fval = get_lnL_share(x, ps);
+            }
+
             // if I am restarting because I reached MAX_LK
             // then I increase the max counter
             if (status == MAX_LK)
             {
-                p->max_counter = 200 * size;
+                ps->max_counter = 200 * size;
                 // though never set it to less than 1000
-                p->max_counter = p->max_counter < 1000 ? 1000 : p->max_counter;
+                ps->max_counter = ps->max_counter < 1000 ? 1000 : ps->max_counter;
+                ps->max_counter = 1000;
             }
             restart = FALSE;
             it = 0;
         }
     }
-    
-    gsl_vector_memcpy(x, gsl_multimin_fdfminimizer_x(state));
+
     // if I had MAX_LK, I want to re-calculate the lk and grad
 	if (status == MAX_LK)
 	{
-		p->counter = 0;
-		p->max_counter = 1000;
+		ps->counter = 0;
+		ps->max_counter = 1000;
 		// free state and reallocate it
-		gsl_multimin_fdfminimizer_free(state);
-        state = gsl_multimin_fdfminimizer_alloc(type, x->size);
-        gsl_multimin_fdfminimizer_set(state, &func, x, po.step_size, po.tol);
+		if (po.grad_descent)
+		{
+			gsl_multimin_fdfminimizer_free(state);
+			state = gsl_multimin_fdfminimizer_alloc(type, x->size);
+			gsl_multimin_fdfminimizer_set(state, func, x, po.step_size, po.tol);
+		}
+		else
+		{
+			gsl_multimin_fminimizer_free(state);
+			state = gsl_multimin_fminimizer_alloc(type, x->size);
+			step_size = gsl_vector_alloc(x->size);
+			gsl_vector_set_all(step_size, po.step_size);
+			gsl_multimin_fminimizer_set(state, func, x, step_size);
+		}
 	}
-    get_lnL(x, p);
 
-    print_result(*p->pm, FALSE, iter, state, status, s);
+	// before printing final result
+    // make sure I store best solution found
+    if (po.grad_descent == TRUE)
+	{
+		gsl_vector_memcpy(x, gsl_multimin_fdfminimizer_x(state));
+		gsl_vector_memcpy(((gsl_multimin_fdfminimizer *) state)->x, x);
+	    ((gsl_multimin_fdfminimizer *) state)->f = gsl_multimin_fdfminimizer_minimum(state);
+	    gsl_vector_memcpy(((gsl_multimin_fdfminimizer *) state)->gradient,
+	    		gsl_multimin_fdfminimizer_gradient(state));
+	    ps->criteria = gsl_blas_dnrm2(((gsl_multimin_fdfminimizer *) state)->gradient);
+	}
+	else
+	{
+		gsl_vector_memcpy(x, gsl_multimin_fminimizer_x(state));
+		gsl_vector_memcpy(((gsl_multimin_fminimizer *) state)->x, x);
+		((gsl_multimin_fminimizer *) state)->fval = gsl_multimin_fminimizer_minimum(state);
+		ps->criteria = gsl_multimin_fminimizer_size(state);
+	}
+    get_lnL_share(x, ps);
+    print_result_gen(*ps, FALSE, iter, state, status, s, po.grad_descent);
+
     if (iter > po.max_iter)
     {
         printf("-- Local optimization: reached maximum number of iterations "
@@ -631,111 +971,274 @@ int optimize_partial_ln(const gsl_multimin_fdfminimizer_type *type,
     }
     else if (status == FOUND_NAN)
     {
-        printf("-- Likelihood or gradient is nan\n");
+        printf("-- Likelihood or gradient is NAN\n");
     } else if (status == OUT_OF_TIME)
     {
         printf("-- Local optimization: reached maximum running time allowed\n");
     }
     else if (status == MAX_LK)
     {
-        printf("-- Reached maximum number of likelihood evaluations allowed. "
-               "Results are not reliable\n");
+        printf("-- Local optimization: reached maximum number of likelihood "
+        		"evaluations allowed.\n");
     }
     else if (status)
     {
         printf("-- Local optimization: %s\n", gsl_strerror(status));
     }
 
-    // store best optimum found
-    get_lnL(gsl_multimin_fdfminimizer_x(state), p);
-    p->grad = gsl_blas_dnrm2(state->gradient);
-
     // free memory
+    free(func);
     gsl_vector_free(x);
     gsl_vector_free(prev_x);
     gsl_vector_free(prev_restart_x);
-    gsl_multimin_fdfminimizer_free(state);
+    if (po.grad_descent == TRUE)
+    {
+    	gsl_multimin_fdfminimizer_free(state);
+    }
+    else
+    {
+    	gsl_multimin_fminimizer_free(state);
+    }
 
     // make sure the counter is reset to 0
-    p->counter = 0;
-    p->max_counter = 1000;
+    ps->counter = 0;
+    ps->max_counter = 1000;
 
     return (EXIT_SUCCESS);
 }
 
-int optimize_using_derivatives(const gsl_multimin_fdfminimizer_type *type,
-                               ParamsOptim po, Params *p, char *s)
+int optimize_per_file(const void *type,
+		              ParamsOptim po, ParamsShare *ps, char *s)
 {
-    // p->kind: kind of likelihood to optimize
+	// if no parameters are shared between the files
+	// I need to run the optimization for each file separately
+
+	// the easy one, I have shared parameters or just one file
+	ps->which = -1;
+	if (ps->no_data == 1 || ps->idx[0] > 0)
+	{
+		optimize_partial_ln(type, po, ps, s);
+		return (EXIT_SUCCESS);
+	}
+
+	// run each file separately
+	size_t i = 0;
+	for (i = 0; i < ps->no_data; i++)
+	{
+		ps->which = i;
+		optimize_partial_ln(type, po, ps, s);
+
+	}
+
+	// I need to calculate the joint likelihood and gradient
+	ps->which = -1;
+	int size = 0;
+	if (ps->use_neut_ln == TRUE)
+	{
+		size += ps->neut;
+	}
+	if (ps->use_sel_ln == TRUE)
+	{
+		size += ps->sel;
+	}
+
+	gsl_vector *x = gsl_vector_alloc(size);
+	// initialize x
+	transform(&x, *ps);
+
+	// before initialization, make sure the counter is 0!
+	ps->counter = 0;
+
+	// calculate joint lk and gradient / size
+	if (po.grad_descent == TRUE)
+	{
+		gsl_multimin_function_fdf func;
+		func.n = x->size;
+		func.f = &get_lnL_share;
+		func.df = &set_lnL_df;
+		func.fdf = &set_lnL_fdf;
+		func.params = (void *) ps;
+
+		// initialize state
+		gsl_multimin_fdfminimizer *state = gsl_multimin_fdfminimizer_alloc(type,
+				                                                       x->size);
+		gsl_multimin_fdfminimizer_set(state, &func, x, po.step_size, po.tol);
+		ps->criteria = gsl_blas_dnrm2(state->gradient);
+
+		// print the info on the joint likelihood and gradient
+		if (ps->use_neut_ln == TRUE && ps->use_sel_ln == TRUE)
+		{
+			printf("-- Joint likelihood over all files %.15f and gradient %.5f\n",
+					-state->f, ps->criteria);
+		}
+		else
+		{
+			if (ps->use_neut_ln == TRUE)
+			{
+				printf("-- Joint neutral likelihood over all files %.15f and gradient %.5f\n",
+						-state->f, ps->criteria);
+			}
+			if (ps->use_sel_ln == TRUE)
+			{
+				printf("-- Joint selected likelihood over all files %.15f and gradient %.5f\n",
+						-state->f, ps->criteria);
+			}
+		}
+
+		// free memory
+		gsl_multimin_fdfminimizer_free(state);
+	}
+	else
+	{
+		gsl_multimin_function func;
+		func.n = x->size;
+		func.f = &get_lnL_share;
+		func.params = (void *) ps;
+
+		// initialize state
+		gsl_multimin_fminimizer *state = gsl_multimin_fminimizer_alloc(type,
+				                                                       x->size);
+		gsl_vector *step_size = gsl_vector_alloc(x->size);
+		gsl_vector_set_all(step_size, po.step_size);
+		gsl_multimin_fminimizer_set(state, &func, x, step_size);
+		ps->criteria = gsl_multimin_fminimizer_size(state);
+		// set the initial value of the function
+		state->fval = get_lnL_share(x, ps);
+
+		// print the info on the joint likelihood and gradient
+		if (ps->use_neut_ln == TRUE && ps->use_sel_ln == TRUE)
+		{
+			printf("-- Joint likelihood over all files %.15f and size %.5f\n",
+					-state->fval, ps->criteria);
+		}
+		else
+		{
+			if (ps->use_neut_ln == TRUE)
+			{
+				printf("-- Joint neutral likelihood over all files %.15f and size %.5f\n",
+						-state->fval, ps->criteria);
+			}
+			if (ps->use_sel_ln == TRUE)
+			{
+				printf("-- Joint selected likelihood over all files %.15f and size %.5f\n",
+						-state->fval, ps->criteria);
+			}
+		}
+
+		// free memory
+		gsl_multimin_fminimizer_free(state);
+	}
+
+	// free memory
+	gsl_vector_free(x);
+
+	// store best optimum found
+	ps->lnL = - ps->lnL_neut - ps->lnL_sel;
+
+	return (EXIT_SUCCESS);
+}
+
+int optimize(const void *type, ParamsOptim po, ParamsShare *ps, char *s)
+{
+    // ps->kind: kind of likelihood to optimize
     // 0: neutral, selected
     // 1: neutral, selected, joint
     // 2: joint
 
-    if (p->kind < 2)
+    if (ps->kind < 2)
     {
-        if (p->pm->neut > 0)
+        if (ps->neut > 0)
         {
             // first, optimize the neutral likelihood
             printf("-- Optimizing neutral parameters\n");
-            p->pm->neut_ln = TRUE;
-            p->pm->sel_ln = FALSE;
-            optimize_partial_ln(type, po, p, s);
+            ps->use_neut_ln = TRUE;
+            ps->use_sel_ln = FALSE;
+            optimize_per_file(type, po, ps, s);
         }
-
-        if (p->pm->sel > 0)
+        if (ps->sel > 0)
         {
             // then optimize the selected likelihood
             printf("-- Optimizing selected parameters\n");
-            p->pm->neut_ln = FALSE;
-            p->pm->sel_ln = TRUE;
-            optimize_partial_ln(type, po, p, s);
+            ps->use_neut_ln = FALSE;
+            ps->use_sel_ln = TRUE;
+            optimize_per_file(type, po, ps, s);
         }
     }
 
-    if (p->kind == 0)
+    if (ps->kind == 0)
     {
-        // I need to calcuale the joint gradient
-        p->pm->neut_ln = TRUE;
-        p->pm->sel_ln = TRUE;
-        int size = p->pm->neut + p->pm->sel;
+    	// I need to calculate the joint gradient / size
+    	ps->use_neut_ln = TRUE;
+    	ps->use_sel_ln = TRUE;
+    	int size = ps->neut + ps->sel;
 
-        gsl_vector *x = gsl_vector_alloc(size);
-        // initialize x
-        transform(&x, *p->pm);
+    	gsl_vector *x = gsl_vector_alloc(size);
+    	// initialize x
+    	transform(&x, *ps);
 
-        gsl_multimin_function_fdf func;
-        func.n = x->size;
-        func.f = &get_lnL;
-        func.df = &set_lnL_df;
-        func.fdf = &set_lnL_fdf;
-        func.params = (void *) p;
+    	// calculate joint lk and gradient / size
+    	if (po.grad_descent == TRUE)
+    	{
+    		gsl_multimin_function_fdf func;
+    		func.n = x->size;
+    		func.f = &get_lnL_share;
+    		func.df = &set_lnL_df;
+    		func.fdf = &set_lnL_fdf;
+    		func.params = (void *) ps;
 
-        // initialize state
-        gsl_multimin_fdfminimizer *state = gsl_multimin_fdfminimizer_alloc(type,
-                                                                           x->size);
-        gsl_multimin_fdfminimizer_set(state, &func, x, po.step_size, po.tol);
-        // calcualte joint gradient
-        p->grad = gsl_blas_dnrm2(state->gradient);
+    		// initialize state
+    		gsl_multimin_fdfminimizer *state = gsl_multimin_fdfminimizer_alloc(type,
+    				x->size);
+    		gsl_multimin_fdfminimizer_set(state, &func, x, po.step_size, po.tol);
+    		ps->criteria = gsl_blas_dnrm2(state->gradient);
 
-        // free memory
-        gsl_vector_free(x);
-        gsl_multimin_fdfminimizer_free(state);
+    		// print the info on the joint likelihood and gradient
+    		printf("-- Joint neutral and selected likelihood %.15f and gradient %.5f\n",
+    				-state->f, ps->criteria);
 
-        // print the info on the joint likelihood and gradient
-        printf("-- Joint likelihood %.15f and gradient %.5f\n", -state->f, p->grad);
+    		// free memory
+    		gsl_multimin_fdfminimizer_free(state);
+    	}
+    	else
+    	{
+    		gsl_multimin_function func;
+    		func.n = x->size;
+    		func.f = &get_lnL_share;
+    		func.params = (void *) ps;
+
+    		// initialize state
+    		gsl_multimin_fminimizer *state = gsl_multimin_fminimizer_alloc(type,
+    				x->size);
+    		gsl_vector *step_size = gsl_vector_alloc(x->size);
+    		gsl_vector_set_all(step_size, po.step_size);
+    		gsl_multimin_fminimizer_set(state, &func, x, step_size);
+    		ps->criteria = gsl_multimin_fminimizer_size(state);
+    		// set the initial value of the function
+    		state->fval = get_lnL_share(x, ps);
+
+    		// print the info on the joint likelihood and gradient
+    		printf("-- Joint neutral and selected likelihood %.15f and size %.5f\n",
+    				-state->fval, ps->criteria);
+
+    		// free memory
+    		gsl_multimin_fminimizer_free(state);
+    	}
+
+    	// free memory
+    	gsl_vector_free(x);
     }
 
-    if (p->kind > 0)
+    if (ps->kind > 0)
     {
         // now optimize jointly
         printf("-- Optimizing all parameters\n");
-        p->pm->neut_ln = TRUE;
-        p->pm->sel_ln = TRUE;
-        optimize_partial_ln(type, po, p, s);
+        ps->use_neut_ln = TRUE;
+        ps->use_sel_ln = TRUE;
+        optimize_per_file(type, po, ps, s);
     }
 
     // store best optimum found
-    p->lnL = - p->lnL_neut - p->lnL_sel;
+    ps->lnL = - ps->lnL_neut - ps->lnL_sel;
 
     return (EXIT_SUCCESS);
 }

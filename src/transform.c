@@ -1,5 +1,5 @@
 /*
- * polyDFE v1.11: predicting DFE and alpha from polymorphism data
+ * polyDFE v2.0: predicting DFE and alpha from polymorphism data
  * Copyright (c) 2018  Paula Tataru
  *
  * This program is free software: you can redistribute it and/or modify
@@ -93,49 +93,52 @@ double untran_one(double y, double a, double b, double k)
 /****************************************************************************
  * Transformation functions for model parameters
  ****************************************************************************/
-void transform(gsl_vector **x, ParamsModel pm)
+void transform_flag(gsl_vector **x, ParamsModel pm, int flag,
+                    int idx, int no_groups, int neut_ln, int sel_ln)
 {
-    unsigned i = 0;
+    unsigned i = idx;
     unsigned j = 0;
 
-    if (pm.neut_ln == TRUE)
+    if (neut_ln == TRUE)
     {
-        if (pm.r_flag == TRUE)
+        if (pm.r_flag == flag)
         {
             // r[0] should always be 1
+            // if r is shared but files don't have the same number of rs
+            // this will fail and give problems
             for (i = 1; i < pm.no_groups; i++)
             {
-                gsl_vector_set((*x), i - 1,
+                gsl_vector_set((*x), idx + i - 1,
                                tran_one(pm.r[i], pm.r_min, pm.r_max, pm.k));
             }
-            i--;
+            i += idx - 1 + no_groups - pm.no_groups;
         }
-        if (pm.lambda_flag == TRUE)
+        if (pm.lambda_flag == flag)
         {
             gsl_vector_set((*x), i++,
                            tran(pm.lambda, pm.lambda_min, pm.lambda_max, pm.k));
         }
-        if (pm.theta_bar_flag == TRUE)
+        if (pm.theta_bar_flag == flag)
         {
             gsl_vector_set((*x),
                            i++,
                            tran(pm.theta_bar, pm.theta_bar_min, pm.theta_bar_max,
                                 pm.k));
         }
-        if (pm.a_flag == TRUE)
+        if (pm.a_flag == flag)
         {
             gsl_vector_set((*x),
                            i++,
                            tran_one(pm.a, pm.a_min, pm.a_max, pm.k));
         }
-        if (pm.eps_an_flag == TRUE)
+        if (pm.eps_an_flag == flag)
         {
             gsl_vector_set((*x), i++,
                            tran(pm.eps_an, pm.eps_an_min, pm.eps_an_max, pm.k));
         }
     }
 
-    if (pm.sel_ln == TRUE)
+    if (sel_ln == TRUE)
     {
         // b - position 1 - should be transformed around one
         // everything else has the normal transformation
@@ -143,7 +146,7 @@ void transform(gsl_vector **x, ParamsModel pm)
         // to FALSE for the selection coefficients
         for (j = 0; j < pm.no_sel; j++)
         {
-            if (pm.sel_flag[j] != TRUE)
+            if (pm.sel_flag[j] != flag)
             {
                 // skip this
                 continue;
@@ -162,52 +165,97 @@ void transform(gsl_vector **x, ParamsModel pm)
     }
 }
 
-void undo_transform(ParamsModel *pm, const gsl_vector *x)
+void transform(gsl_vector **x, ParamsShare ps)
 {
-    unsigned i = 0;
+    size_t i = 0;
+
+    // I do the shared parameters just once
+    // from the which_r data
+    transform_flag(x, *ps.p[ps.which_r].pm, SHARED, 0, ps.no_groups,
+                   ps.use_neut_ln, ps.use_sel_ln);
+
+    if (ps.which == -1)
+    {
+    	for (i = 0; i < ps.no_data; i++)
+		{
+			// the non-shared parameters
+			if (ps.use_neut_ln == TRUE && ps.use_sel_ln == TRUE)
+			{
+				transform_flag(x, *ps.p[i].pm, TRUE, ps.idx[i],
+						       ps.p[i].pm->no_groups,
+							   ps.use_neut_ln, ps.use_sel_ln);
+			}
+			else
+			{
+				if (ps.use_neut_ln == TRUE)
+				{
+					transform_flag(x, *ps.p[i].pm, TRUE, ps.idx_neut[i],
+							       ps.p[i].pm->no_groups,
+								   ps.use_neut_ln, ps.use_sel_ln);
+				}
+				if (ps.use_sel_ln == TRUE)
+				{
+					transform_flag(x, *ps.p[i].pm, TRUE, ps.idx_sel[i],
+							       ps.p[i].pm->no_groups,
+								   ps.use_neut_ln, ps.use_sel_ln);
+				}
+			}
+		}
+    }
+    else
+    {
+    	transform_flag(x, *ps.p[ps.which].pm, TRUE, 0, ps.p[ps.which].pm->no_groups,
+    				   ps.use_neut_ln, ps.use_sel_ln);
+    }
+}
+
+void undo_transform_flag(ParamsModel *pm, const gsl_vector *x, int flag,
+                         int idx, int no_groups, int neut_ln, int sel_ln)
+{
+    unsigned i = idx;
     unsigned j = 0;
 
-    if (pm->neut_ln == TRUE)
+    if (neut_ln == TRUE)
     {
-        if (pm->r_flag == TRUE)
+        if (pm->r_flag == flag)
         {
             // r[0] should always be 1
             for (i = 1; i < pm->no_groups; i++)
             {
-                pm->r[i] = untran_one(gsl_vector_get(x, i - 1), pm->r_min,
+                pm->r[i] = untran_one(gsl_vector_get(x, idx + i - 1), pm->r_min,
                                       pm->r_max, pm->k);
             }
-            i--;
+            i += idx - 1 + no_groups - pm->no_groups;
         }
-        if (pm->lambda_flag == TRUE)
+        if (pm->lambda_flag == flag)
         {
             pm->lambda = untran(gsl_vector_get(x, i++), pm->lambda_min,
                                 pm->lambda_max, pm->k);
         }
-        if (pm->theta_bar_flag == TRUE)
+        if (pm->theta_bar_flag == flag)
         {
             pm->theta_bar = untran(gsl_vector_get(x, i++), pm->theta_bar_min,
                                    pm->theta_bar_max, pm->k);
         }
-        if (pm->a_flag == TRUE)
+        if (pm->a_flag == flag)
         {
             pm->a = untran_one(gsl_vector_get(x, i++), pm->a_min,
                                    pm->a_max, pm->k);
         }
-        if (pm->eps_an_flag == TRUE)
+        if (pm->eps_an_flag == flag)
         {
             pm->eps_an = untran(gsl_vector_get(x, i++), pm->eps_an_min,
                                 pm->eps_an_max, pm->k);
         }
     }
 
-    if (pm->sel_ln == TRUE)
+    if (sel_ln == TRUE)
     {
         // b - position 1 - should be transformed around one
         // everything else has the normal transformation
         for (j = 0; j < pm->no_sel; j++)
         {
-            if (pm->sel_flag[j] != TRUE)
+            if (pm->sel_flag[j] != flag)
             {
                 // skip this
                 continue;
@@ -238,6 +286,49 @@ void undo_transform(ParamsModel *pm, const gsl_vector *x)
     }
 }
 
+void undo_transform(ParamsShare *ps, const gsl_vector *x)
+{
+    size_t i = 0;
+
+    if (ps->which == -1)
+    {
+    	for (i = 0; i < ps->no_data; i++)
+		{
+			// first, go over the shared parameters
+			undo_transform_flag(ps->p[i].pm, x, SHARED, 0, ps->no_groups,
+								ps->use_neut_ln, ps->use_sel_ln);
+			// then, the non-shared parameters
+			if (ps->use_neut_ln == TRUE && ps->use_sel_ln == TRUE)
+			{
+				undo_transform_flag(ps->p[i].pm, x, TRUE, ps->idx[i],
+						            ps->p[i].pm->no_groups,
+									ps->use_neut_ln, ps->use_sel_ln);
+			}
+			else
+			{
+				if (ps->use_neut_ln == TRUE)
+				{
+					undo_transform_flag(ps->p[i].pm, x, TRUE, ps->idx_neut[i],
+							            ps->p[i].pm->no_groups,
+										ps->use_neut_ln, ps->use_sel_ln);
+				}
+				if (ps->use_sel_ln == TRUE)
+				{
+					undo_transform_flag(ps->p[i].pm, x, TRUE, ps->idx_sel[i],
+							            ps->p[i].pm->no_groups,
+										ps->use_neut_ln, ps->use_sel_ln);
+				}
+			}
+		}
+    }
+    else
+    {
+    	undo_transform_flag(ps->p[ps->which].pm, x, TRUE, 0,
+    			            ps->p[ps->which].pm->no_groups,
+    						ps->use_neut_ln, ps->use_sel_ln);
+    }
+}
+
 double one_step(double step, double value, double min_value, double max_value)
 {
     // randomly change value, in the range min_value and max_value,
@@ -247,12 +338,13 @@ double one_step(double step, double value, double min_value, double max_value)
     // find a new value that is approximately +- step away from the current value
     double low = min_value >= value - step ? min_value : value - step;
     double up = max_value <= value + step ? max_value : value + step;
-    double u = drand48();
+    double u = rand() / RAND_MAX;
     u = low + (up - low) * u;
     return (u);
 }
 
-void random_step(ParamsModel *pm, double step)
+void random_step_flag(ParamsModel *pm, double step, int flag,
+                      int neut_ln, int sel_ln)
 {
     unsigned i = 0;
     // calculate the transformed step for all parameters
@@ -261,9 +353,9 @@ void random_step(ParamsModel *pm, double step)
     // for the parameters that have the transformation around one
     // because the step and the parameters do not have the same meaning
 
-    if (pm->neut_ln == TRUE)
+    if (neut_ln == TRUE)
     {
-        if (pm->r_flag == TRUE)
+        if (pm->r_flag == flag)
         {
             // r[0] should always be 1
             for (i = 1; i < pm->no_groups; i++)
@@ -273,25 +365,25 @@ void random_step(ParamsModel *pm, double step)
                                 pm->r[i], pm->r_min, pm->r_max);
             }
         }
-        if (pm->lambda_flag == TRUE)
+        if (pm->lambda_flag == flag)
         {
             pm->lambda = one_step(
                             untran_step(step, pm->lambda_max - pm->lambda_min, pm->k),
                             pm->lambda, pm->lambda_min, pm->lambda_max);
         }
-        if (pm->theta_bar_flag == TRUE)
+        if (pm->theta_bar_flag == flag)
         {
             pm->theta_bar = one_step(
                             untran_step(step, pm->theta_bar_max - pm->theta_bar_min, pm->k),
                             pm->theta_bar, pm->theta_bar_min, pm->theta_bar_max);
         }
-        if (pm->a_flag == TRUE)
+        if (pm->a_flag == flag)
         {
             pm->a = one_step(
                             untran_step(step, pm->a_max - pm->a_min, pm->k),
                             pm->a, pm->a_min, pm->a_max);
         }
-        if (pm->eps_an_flag == TRUE)
+        if (pm->eps_an_flag == flag)
         {
             pm->eps_an = one_step(
                             untran_step(step, pm->eps_an_max - pm->eps_an_min, pm->k),
@@ -299,7 +391,7 @@ void random_step(ParamsModel *pm, double step)
         }
     }
 
-    if (pm->sel_ln == TRUE)
+    if (sel_ln == TRUE)
     {
         if (pm->model < 4)
         {
@@ -325,7 +417,7 @@ void random_step(ParamsModel *pm, double step)
             for (i = 0; i < pm->no_sel/2; i++)
             {
                 // only randomize if this parameter is estimated
-                if (pm->sel_flag[2 * i + 1] == TRUE)
+                if (pm->sel_flag[2 * i + 1] == flag)
                 {
                     max = sum < pm->sel_max[2 * i + 1] ?
                                     sum : pm->sel_max[2 * i + 1];
@@ -350,5 +442,22 @@ void random_step(ParamsModel *pm, double step)
             }
             pm->sel_params[pm->sel_fixed] = sum;
         }
+    }
+}
+
+void random_step(ParamsShare *ps, double step)
+{
+    size_t i = 0;
+
+    // I do the shared parameters just once
+    // from the first data
+    random_step_flag(ps->p[0].pm, step, SHARED,
+                     ps->use_neut_ln, ps->use_sel_ln);
+
+    for (i = 0; i < ps->no_data; i++)
+    {
+        // the non-shared parameters
+        random_step_flag(ps->p[i].pm, step, TRUE,
+                         ps->use_neut_ln, ps->use_sel_ln);
     }
 }

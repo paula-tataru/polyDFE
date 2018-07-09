@@ -1,5 +1,5 @@
 /*
- * polyDFE v1.11: predicting DFE and alpha from polymorphism data
+ * polyDFE v2.0: predicting DFE and alpha from polymorphism data
  * Copyright (c) 2018  Paula Tataru
  *
  * This program is free software: you can redistribute it and/or modify

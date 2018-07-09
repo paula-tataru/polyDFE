@@ -1,5 +1,5 @@
 /*
- * polyDFE v1.11: predicting DFE and alpha from polymorphism data
+ * polyDFE v2.0: predicting DFE and alpha from polymorphism data
  * Copyright (c) 2018  Paula Tataru and Marco A.P. Franco
  *
  * This program is free software: you can redistribute it and/or modify
@@ -41,24 +41,26 @@ struct params_optim_s
     double tol;         ///< accuracy of line minimization
     double max_iter;    ///< maximum allowed iterations
     double minutes;     ///< maximum allowed minutes for one full run
+    int grad_descent;   ///< TRUE if I am using a gradient descent
 };
 typedef struct params_optim_s ParamsOptim;
 
 void initialize_params_optim(ParamsOptim *po);
 
-void print_hearder_solution_neut(ParamsModel pm, int with_fixed, FILE *f);
-void print_hearder_solution_demo(ParamsModel pm, int with_fixed, FILE *f);
-void print_hearder_solution_sel(ParamsModel pm, int with_fixed, FILE *f);
-void print_hearder_solution(ParamsModel pm, int with_fixed);
-void print_solution_neut(ParamsModel pm, int with_fixed, gsl_vector *x, char *s,
-                         FILE *f);
-void print_solution_demo(ParamsModel pm, int with_fixed, gsl_vector *x, char *s,
-                         FILE *f);
-void print_solution_sel(ParamsModel pm, int with_fixed, gsl_vector *x, char *s,
-                        FILE *f);
-void print_solution(ParamsModel pm, int with_fixed, gsl_vector *x, char *s);
+void print_header_solution_neut(ParamsModel pm, int i, int with_fixed, FILE *f,
+                                int flag);
+void print_header_solution_demo(ParamsModel pm, int i, int with_fixed, FILE *f,
+                                int flag);
+void print_header_solution_sel(ParamsModel pm, int i, int with_fixed, FILE *f,
+                               int flag);
+void print_header_solution(ParamsModel pm, int i, int with_fixed, int flag,
+                           int neut_ln, int sel_ln);
+void print_solution_neut(ParamsModel pm, int with_fixed, char *s, FILE *f, int flag);
+void print_solution_demo(ParamsModel pm, int with_fixed, char *s, FILE *f, int flag);
+void print_solution_sel(ParamsModel pm, int with_fixed, char *s, FILE *f, int flag);
+void print_solution(ParamsModel pm, int with_fixed, char *s, int flag,
+                    int neut_ln, int sel_ln);
 
-int optimize_using_derivatives(const gsl_multimin_fdfminimizer_type *type,
-                               ParamsOptim po, Params *p, char *s);
+int optimize(const void *type, ParamsOptim po, ParamsShare *ps, char *s);
 
 #endif

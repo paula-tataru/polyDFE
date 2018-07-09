@@ -1,8 +1,8 @@
 ############################################################
 # for non-default GSL installation
 ############################################################
-# USR_INC := -I<ROOT PATH TO GSL 1.16>/include/
-# USR_LIB := -L<ROOT PATH TO GSL 1.16>/lib/
+USR_INC := -IC:/cygwin64/usr/local/include/
+USR_LIB := -LC:/cygwin64/usr/local/lib/
 ############################################################
 
 RM := rm -rf

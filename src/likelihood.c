@@ -1,5 +1,5 @@
 /*
- * polyDFE v1.11: predicting DFE and alpha from polymorphism data
+ * polyDFE v2.0: predicting DFE and alpha from polymorphism data
  * Copyright (c) 2018  Paula Tataru and Marco A.P. Franco
  *
  * This program is free software: you can redistribute it and/or modify
@@ -43,14 +43,28 @@ void fprintf_groups(ParamsModel pm, FILE *f, char *s)
 {
     unsigned i;
     unsigned curr_group = 1;
-    fprintf(f, "%s Using %d groups for the r parameters: [", s, pm.no_groups - 1);
+    int new_line = FALSE;
+    fprintf(f, "%s      Using %d groups for the r parameters:\n%s           [",
+            s, pm.no_groups - 1, s);
     // skip r1
-    for (i = 1; i < pm.no_r - 1; i++)
+    for (i = 1; i < pm.no_r; i++)
     {
+        if (i % 10 == 0)
+        {
+            new_line = TRUE;
+        }
         if (pm.inv_groups[i] != curr_group)
         {
             curr_group = pm.inv_groups[i];
-            fprintf(f, "], [");
+            if (new_line == TRUE)
+            {
+                fprintf(f, "],\n%s           [", s);
+                new_line = FALSE;
+            }
+            else
+            {
+                fprintf(f, "], [");
+            }
         }
         fprintf(f, "%d", i+1);
         if (pm.inv_groups[i + 1] == curr_group)
@@ -58,19 +72,12 @@ void fprintf_groups(ParamsModel pm, FILE *f, char *s)
             fprintf(f, ", ");
         }
     }
-    // print last r
-    i = pm.no_r - 1;
-    if (pm.inv_groups[i] != curr_group)
-    {
-        curr_group = pm.inv_groups[i];
-        fprintf(f, "], [");
-    }
-    fprintf(f, "%d] \n", i + 1);
+    fprintf(f, "] \n");
 }
 
 void fprintf_params_model(ParamsModel pm, FILE *f, char *s)
 {
-    char *aux = malloc(sizeof(char) * 15);
+    char *aux = malloc(sizeof(char) * 50);
     switch (pm.model)
     {
         case 1:
@@ -95,23 +102,31 @@ void fprintf_params_model(ParamsModel pm, FILE *f, char *s)
         }
     }
 
+    // first shared, than rest
+
     // print neut params
     fprintf(f, "%s", s);
-    print_hearder_solution_neut(pm, TRUE, f);
+    print_header_solution_neut(pm, -1, FALSE, f, SHARED);
+    print_header_solution_neut(pm, -1, TRUE, f, TRUE);
     fprintf(f, "\n%s", s);
-    print_solution_neut(pm, TRUE, NULL, aux, f);
+    print_solution_neut(pm, FALSE, aux, f, SHARED);
+    print_solution_neut(pm, TRUE, aux, f, TRUE);
     fprintf(f, "\n%s", s);
 
     // print sel params
-    print_hearder_solution_sel(pm, TRUE, f);
+    print_header_solution_sel(pm, -1, FALSE, f, SHARED);
+    print_header_solution_sel(pm, -1, TRUE, f, TRUE);
     fprintf(f, "\n%s", s);
-    print_solution_sel(pm, TRUE, NULL, aux, f);
+    print_solution_sel(pm, FALSE, aux, f, SHARED);
+    print_solution_sel(pm, TRUE, aux, f, TRUE);
     fprintf(f, "\n%s", s);
 
     // print demo params
-    print_hearder_solution_demo(pm, TRUE, f);
+    print_header_solution_demo(pm, -1, FALSE, f, SHARED);
+    print_header_solution_demo(pm, -1, TRUE, f, TRUE);
     fprintf(f, "\n%s", s);
-    print_solution_demo(pm, TRUE, NULL, aux, f);
+    print_solution_demo(pm, FALSE, aux, f, SHARED);
+    print_solution_demo(pm, TRUE, aux, f, TRUE);
     fprintf(f, "\n");
 
     free(aux);
@@ -167,23 +182,21 @@ void initialize_params_model(ParamsModel *pm)
     pm->sel_min = NULL;
     pm->sel_max = NULL;
 
+    pm->div_flag = TRUE;
+
     // parameters flags
-    pm->r_flag = TRUE;
-    pm->eps_an_flag = TRUE;
-    pm->lambda_flag = TRUE;
-    pm->theta_bar_flag = TRUE;
-    pm->a_flag = TRUE;
+    // by default, they are SHARED
+    pm->r_flag = SHARED;
+    pm->eps_an_flag = SHARED;
+    pm->lambda_flag = SHARED;
+    pm->theta_bar_flag = SHARED;
+    pm->a_flag = SHARED;
     pm->sel_flag = NULL;
     pm->sel_fixed = 1;
-
-    pm->div_flag = TRUE;
 
     // number of parameters to estimate
     pm->neut = 0;
     pm->sel = 0;
-
-    pm->neut_ln = FALSE;
-    pm->sel_ln = FALSE;
 
     pm->k = 0.01;
 
@@ -200,17 +213,9 @@ void initialize_params(Params *p)
     p->expec_neut = NULL;
     p->expec_sel = NULL;
 
-    p->verbose = 0;
-
     p->lnL = DBL_MAX;
     p->lnL_neut = DBL_MAX;
     p->lnL_sel = DBL_MAX;
-    p->grad = DBL_MAX;
-
-    p->kind = 2;
-
-    p->counter = 0;
-    p->max_counter = 1000;
 
     p->pm = malloc(sizeof(ParamsModel));
     initialize_params_model(p->pm);
@@ -218,13 +223,14 @@ void initialize_params(Params *p)
 
 void initialize_selection_params(ParamsModel *pm, char *range)
 {
-    // according to the model, set the right flags to TRUE
+    // according to the model, set the right flags
+    // by default, everything is shared
     unsigned i = 0;
     if (pm->model < 4)
     {
         for (i = 0; i < pm->no_sel; i++)
         {
-            pm->sel_flag[i] = TRUE;
+            pm->sel_flag[i] = SHARED;
         }
 
         if (range == NULL)
@@ -257,9 +263,9 @@ void initialize_selection_params(ParamsModel *pm, char *range)
         // model D - every second flag should be TRUE
         for (i = 0; i < pm->no_sel / 2; i++)
         {
-            // set the flag of the probabilities to TRUE
-            pm->sel_flag[2 * i + 1] = TRUE;
-            // set the flag of the coefficients to TRUE
+            // set the flag of the probabilities to SHARED
+            pm->sel_flag[2 * i + 1] = SHARED;
+            // set the flag of the coefficients to FALSE
             pm->sel_flag[2 * i] = FALSE;
         }
 
@@ -280,6 +286,50 @@ void initialize_selection_params(ParamsModel *pm, char *range)
     }
 }
 
+void initialize_params_share(ParamsShare *ps)
+{
+    ps->no_data = 0;
+    ps->data_files = NULL;
+    ps->p = NULL;
+
+    // by default, I share everything
+    ps->r_shared = TRUE;
+    ps->eps_an_shared = TRUE;
+    ps->lambda_shared = TRUE;
+    ps->theta_bar_shared = TRUE;
+    ps->a_shared = TRUE;
+    ps->sel_shared = NULL;
+
+    ps->no_groups = 0;
+
+    ps->neut = 0;
+    ps->sel = 0;
+
+    ps->idx = NULL;
+    ps->idx_neut = NULL;
+    ps->idx_sel = NULL;
+
+    ps->lnL = DBL_MAX;
+    ps->lnL_neut = DBL_MAX;
+    ps->lnL_sel = DBL_MAX;
+
+    ps->criteria = DBL_MAX;
+
+    ps->kind = 2;
+    ps->which = -1;
+
+    ps->use_neut_ln = TRUE;
+    ps->use_sel_ln = TRUE;
+
+    ps->initial_estimation = TRUE;
+    ps->initial_values = FALSE;
+
+    ps->verbose = 0;
+
+    ps->counter = 0;
+    ps->max_counter = 10000;
+}
+
 /****************************************************************************
  * Functions on structures: allocation
  * (and initialization of the allocated memory)
@@ -293,6 +343,19 @@ void set_to_zero(double **arr, int len)
     }
 }
 
+int is_any_zero(double *arr, int len)
+{
+    unsigned i = 0;
+    for (i = 0; i < len; i++)
+    {
+        if (arr[i] == 0)
+        {
+        	return (TRUE);
+        }
+    }
+    return (FALSE);
+}
+
 void allocate_counts(Counts *c, int n)
 {
     c->sfs = malloc(sizeof(double) * n);
@@ -304,9 +367,6 @@ int allocate_grouping(ParamsModel *pm, double *groups)
     unsigned i = 0;
     // with r for divergence; without r for divergence should be pm->n - 1
     pm->no_r = pm->n;
-
-//    // set divergence without r
-//    pm->no_r = pm->n - 1;
 
     // if I do not use divergence data, then I am working without r for divergence
     if (pm->div_flag == FALSE)
@@ -416,6 +476,21 @@ void allocate_params(Params *p)
     allocate_selection_params(p->pm);
 }
 
+void allocate_params_share(ParamsShare *ps, size_t no_data)
+{
+    initialize_params_share(ps);
+
+    ps->no_data = no_data;
+    ps->p = malloc(sizeof(Params) * no_data);
+
+    // the allocation of each individual Params
+    // is done when parsing the data
+
+    // the allocation of the selection flags
+    // and indexes
+    // can only be done later on
+}
+
 /****************************************************************************
  * Functions on structures: freeing
  ****************************************************************************/
@@ -486,8 +561,48 @@ void free_params(Params *p)
     }
     if (p->pm)
     {
-        free_params_model(p->pm);
+    	free_params_model(p->pm);
+    }
+    if (p->pm)
+    {
         free(p->pm);
+    }
+}
+
+void free_params_share(ParamsShare *ps)
+{
+    unsigned i;
+    for (i = 0; i < ps->no_data; i++)
+    {
+    	free_params(&ps->p[i]);
+        if (ps->data_files[i])
+        {
+            free(ps->data_files[i]);
+        }
+    }
+    if (ps->p)
+    {
+        free(ps->p);
+    }
+    if (ps->data_files)
+    {
+        free(ps->data_files);
+    }
+    if (ps->sel_shared)
+    {
+        free(ps->sel_shared);
+    }
+    if (ps->idx)
+    {
+        free(ps->idx);
+    }
+    if (ps->idx_neut)
+    {
+        free(ps->idx_neut);
+    }
+    if (ps->idx_sel)
+    {
+        free(ps->idx_sel);
     }
 }
 
@@ -591,7 +706,7 @@ void set_params_sel(ParamsModel *pm, int no_steps, int *it)
 	i = 1;
 	if (pm->model < 4)
 	{
-	    if (pm->sel_flag[i] == TRUE && pm->sel_min[i] < 1 && pm->sel_max[i] > 1)
+	    if (pm->sel_flag[i] != FALSE && pm->sel_min[i] < 1 && pm->sel_max[i] > 1)
 	    {
 	        int this_step = no_steps / 2;
 	        if (it[i] < this_step)
@@ -616,7 +731,7 @@ void set_params_eps(ParamsModel *pm, int no_steps, int it)
     double diff = 0;
     // move away from boundaries with per
     double per = 0.2;
-    if (pm->eps_an_flag == TRUE)
+    if (pm->eps_an_flag != FALSE)
     {
         diff = pm->eps_an_max - pm->eps_an_min;
         pm->eps_an = pm->eps_an_min + diff * per
@@ -659,6 +774,211 @@ void count_params(ParamsModel *pm)
         {
             pm->sel++;
         }
+    }
+}
+
+void set_sharing(ParamsShare *ps, char *init)
+{
+    unsigned i = 0;
+    unsigned j = 0;
+    // allocate the flags for the selection params
+    // I use the same model for all, so I can just look at the first one
+    ps->sel_shared = malloc(sizeof(double) * ps->p[0].pm->no_sel);
+
+    // given the flags that I read in the init file
+    // I set the sharing flags and update the flags
+    // in each Params
+
+    // if I didn't use any init file,
+    // than everything should be shared by default
+    if (init == NULL)
+    {
+        // everything is shared
+        ps->r_shared = TRUE;
+        ps->eps_an_shared = TRUE;
+        ps->lambda_shared = TRUE;
+        ps->theta_bar_shared = TRUE;
+        ps->a_shared = TRUE;
+        for (i = 0; i < ps->p[0].pm->no_sel; i++)
+        {
+            ps->sel_shared[i] = TRUE;
+        }
+    }
+    else
+    {
+        // make sure sharing is first initialized to FALSE
+        ps->r_shared = FALSE;
+        ps->eps_an_shared = FALSE;
+        ps->lambda_shared = FALSE;
+        ps->theta_bar_shared = FALSE;
+        ps->a_shared = FALSE;
+        for (i = 0; i < ps->p[0].pm->no_sel; i++)
+        {
+            ps->sel_shared[i] = FALSE;
+        }
+
+        // set sharing from the existing flags
+        for (j = 0; j < ps->no_data; j++)
+        {
+            if (ps->p[j].pm->r_flag == SHARED)
+            {
+                ps->r_shared = TRUE;
+            }
+            if (ps->p[j].pm->eps_an_flag == SHARED)
+            {
+                ps->eps_an_shared = TRUE;
+            }
+            if (ps->p[j].pm->lambda_flag == SHARED)
+            {
+                ps->lambda_shared = TRUE;
+            }
+            if (ps->p[j].pm->theta_bar_flag == SHARED)
+            {
+                ps->theta_bar_shared = TRUE;
+            }
+            if (ps->p[j].pm->a_flag == SHARED)
+            {
+                ps->a_shared = TRUE;
+            }
+
+            for (i = 0; i < ps->p[0].pm->no_sel; i++)
+            {
+                if (ps->p[j].pm->sel_flag[i] == SHARED)
+                {
+                    ps->sel_shared[i] = TRUE;
+                }
+            }
+        }
+    }
+
+    // now update the flags in each Param
+    // if something is shared one place, make sure it's shared everywhere
+    // set sharing from the existing flags
+    for (j = 0; j < ps->no_data; j++)
+    {
+        if (ps->r_shared == TRUE)
+        {
+            ps->p[j].pm->r_flag = SHARED;
+        }
+        if (ps->eps_an_shared == TRUE)
+        {
+            ps->p[j].pm->eps_an_flag = SHARED;
+        }
+        if (ps->lambda_shared == TRUE)
+        {
+            ps->p[j].pm->lambda_flag = SHARED;
+        }
+        if (ps->theta_bar_shared == TRUE)
+        {
+            ps->p[j].pm->theta_bar_flag = SHARED;
+        }
+        if (ps->a_shared == TRUE)
+        {
+            ps->p[j].pm->a_flag = SHARED;
+        }
+
+        for (i = 0; i < ps->p[0].pm->no_sel; i++)
+        {
+            if (ps->sel_shared[i] == TRUE)
+            {
+                ps->p[j].pm->sel_flag[i] = SHARED;
+            }
+        }
+    }
+}
+
+void count_total_params(ParamsShare *ps)
+{
+    // count the number of parameters in each Params
+    // and set the total number of parameters
+    // together with the indexes
+    unsigned i = 0;
+    unsigned j = 0;
+    ps->neut = 0;
+    ps->sel = 0;
+
+    ps->idx = malloc(sizeof(int) * ps->no_data);
+    ps->idx_neut = malloc(sizeof(int) * ps->no_data);
+    ps->idx_sel = malloc(sizeof(int) * ps->no_data);
+    ps->idx[0] = 0;
+    ps->idx_neut[0] = 0;
+    ps->idx_sel[0] = 0;
+
+    for (j = 0; j < ps->no_data; j++)
+    {
+        count_params(ps->p[j].pm);
+        ps->neut += ps->p[j].pm->neut;
+        ps->sel += ps->p[j].pm->sel;
+    }
+
+    // add shared parameters
+    // and update ps->idx[0] as it should be equal to the number of shared params
+    if (ps->lambda_shared == TRUE)
+    {
+        ps->neut++;
+        ps->idx[0]++;
+        ps->idx_neut[0]++;
+    }
+    if (ps->theta_bar_shared == TRUE)
+    {
+        ps->neut++;
+        ps->idx[0]++;
+        ps->idx_neut[0]++;
+    }
+    if (ps->a_shared == TRUE)
+    {
+        ps->neut++;
+        ps->idx[0]++;
+        ps->idx_neut[0]++;
+    }
+    if (ps->eps_an_shared == TRUE)
+    {
+        ps->neut++;
+        ps->idx[0]++;
+        ps->idx_neut[0]++;
+    }
+
+    // calculate ps->no_groups
+    // here, I have to take the largest of all no_groups
+    // I also need to store where this is found
+    ps->no_groups = ps->p[0].pm->no_groups;
+    ps->which_r = 0;
+    for (j = 1; j < ps->no_data; j++)
+    {
+    	if (ps->no_groups < ps->p[j].pm->no_groups)
+    	{
+    		ps->no_groups = ps->p[j].pm->no_groups;
+    		ps->which_r = j;
+    	}
+    }
+
+    if (ps->r_shared == TRUE)
+    {
+        ps->neut += ps->no_groups - 1;
+        ps->idx[0] += ps->no_groups - 1;
+        ps->idx_neut[0] += ps->no_groups - 1;
+    }
+
+    // parameters for DFE
+    for (i = 0; i < ps->p[0].pm->no_sel; i++)
+    {
+        if (ps->sel_shared[i] == TRUE)
+        {
+            ps->sel++;
+            ps->idx[0]++;
+            ps->idx_sel[0]++;
+        }
+    }
+
+    // set indexes for the rest
+//    TODO
+//    printf("%d\t%d %d %d\n", 0, ps->idx[0], ps->idx_neut[0], ps->idx_sel[0]);
+    for (j = 1; j < ps->no_data; j++)
+    {
+        ps->idx[j] = ps->idx[j - 1] + ps->p[j - 1].pm->neut + ps->p[j - 1].pm->sel;
+        ps->idx_neut[j] = ps->idx_neut[j - 1] + ps->p[j - 1].pm->neut;
+        ps->idx_sel[j] = ps->idx_sel[j - 1] + ps->p[j - 1].pm->sel;
+//        printf("%d\t%d %d %d\n", j, ps->idx[j], ps->idx_neut[j], ps->idx_sel[j]);
     }
 }
 
@@ -758,6 +1078,7 @@ double approx_div_int(ParamsModel *pm, double S)
 double get_sel_expec_fix_small_sel(ParamsModel *pm, double S)
 {
     // when S is close to 0, use the taylor expansion instead
+	double approx = 0;
 	double aux = 0;
 
     // expectation for SFS
@@ -768,16 +1089,17 @@ double get_sel_expec_fix_small_sel(ParamsModel *pm, double S)
 					+ S / (2 * (pm->n + 1))
 					+ (2 * j -  pm->n) * S * S
 							/ (12 * (pm->n + 1) * (pm->n + 2)));
-    	if (aux < 0)
+    	approx = pm->theta_bar * pm->r[pm->inv_groups[pm->i]] * aux;
+    	if (approx < 0)
 		{
 			fprintf(stderr,
 					"Expectation for SFS is negative, i %d n %d S %g "
-					"aux %g\n",
-					pm->i + 1, pm->n, S, aux);
+					"approx %g aux %g\n",
+					pm->i + 1, pm->n, S, approx, aux);
 			exit(1);
 		}
 
-    	return (pm->theta_bar * pm->r[pm->inv_groups[pm->i]] * aux);
+    	return (approx);
     }
 
     // expectation for divergence
@@ -809,6 +1131,15 @@ double get_sel_expec_fix_small_sel(ParamsModel *pm, double S)
         {
             // without r for divergence - assume 1
             div += pm->theta_bar * aux;
+        }
+
+        if (div < 0)
+        {
+        	fprintf(stderr,
+        			"Expectation for divergence is negative, n %d S %g "
+        			"aux %g div %g\n",
+					pm->n, S, aux, div);
+        	exit(1);
         }
     }
 
@@ -937,7 +1268,7 @@ double get_disp_ref_gamma(double S, void *pv)
 
 double get_integrand_disp_ref_gamma(double S, void *pv)
 {
-    return (get_disp_ref_gamma(S, pv)
+	return (get_disp_ref_gamma(S, pv)
             * get_sel_expec_fix_sel((ParamsModel *) pv, S));
 }
 
@@ -1117,7 +1448,7 @@ int set_sel_expec(ParamsModel *pm, double **expec, unsigned negative_only)
                                          xmax, &get_integrand_disp_ref_gamma);
             if (status != EXIT_SUCCESS)
             {
-             	return (EXIT_FAILURE);
+            	return (EXIT_FAILURE);
             }
         }
 
@@ -1276,7 +1607,10 @@ double get_lnL_one_frag(int div_flag, int n, Counts c, double *e, double a)
     for (i = 0; i < n - 1; i++)
     {
         lnL += get_log_neg_bin(c.sfs[i], c.len_poly * e[i], a);
-
+        if (gsl_isnan(lnL) == 1)
+        {
+        	break;
+        }
     }
     if (div_flag == TRUE)
     {
@@ -1332,39 +1666,6 @@ void set_sel_lnL(Params *p)
     }
 }
 
-double get_sel_lnL(const gsl_vector *x, void *pv)
-{
-    Params *p = (Params *) pv;
-
-    // check the counter
-    if (p->counter >= p->max_counter)
-    {
-        // reached maximum number of allowed likelihood evaluations
-        // per optimization iteration
-        // so GSL might be stuck - force it to stop by returning Inf
-        return (DBL_MAX);
-    }
-
-    // update counter
-    p->counter++;
-
-    // update the content of p from x
-    undo_transform(p->pm, x);
-
-    // check the validity of probabilities for discretized DFE
-    if (p->pm->model == 4
-                    && (p->pm->sel_params[p->pm->sel_fixed] < 0
-                    || p->pm->sel_params[p->pm->sel_fixed] > 1))
-    {
-        // return (GSL_NAN);
-        return (DBL_MAX);
-    }
-
-    set_sel_lnL(p);
-
-    return ( - p->lnL_sel);
-}
-
 void set_neut_lnL(Params *p)
 {
     // calculate expectations
@@ -1375,12 +1676,57 @@ void set_neut_lnL(Params *p)
     p->lnL_neut = get_lnL_aux(p, p->no_neut, p->counts_neut, p->expec_neut);
 }
 
-double get_neut_lnL(const gsl_vector *x, void *pv)
+/****************************************************************************
+ * Joint likelihood calculation for ParamsShare
+ ****************************************************************************/
+double set_sel_lnL_share_file(ParamsShare *ps, size_t i)
 {
-    Params *p = (Params *) pv;
+	int status = EXIT_SUCCESS;
+
+	// calculate expectations
+	status = set_sel_expec(ps->p[i].pm, &ps->p[i].expec_sel, FALSE);
+
+	if (status == EXIT_FAILURE)
+	{
+		ps->p[i].lnL_sel = GSL_NAN;
+	}
+	else
+	{
+		// add ancestral error
+		set_anc_expec(ps->p[i].pm->eps_an, ps->p[i].pm->n, &ps->p[i].expec_sel);
+		ps->p[i].lnL_sel = get_lnL_aux(&ps->p[i], ps->p[i].no_sel,
+									   ps->p[i].counts_sel, ps->p[i].expec_sel);
+	}
+
+    return (ps->p[i].lnL_sel);
+}
+
+void set_sel_lnL_share(ParamsShare *ps)
+{
+    size_t i = 0;
+    ps->lnL_sel = 0;
+
+    // for which files do I calculate the likelihood?
+	if (ps->which == -1)
+	{
+		for (i = 0; i < ps->no_data; i++)
+		{
+			ps->lnL_sel += set_sel_lnL_share_file(ps, i);
+		}
+	}
+	else
+	{
+		ps->lnL_sel = set_sel_lnL_share_file(ps, ps->which);
+	}
+}
+
+double get_sel_lnL_share(const gsl_vector *x, void *pv)
+{
+    ParamsShare *ps = (ParamsShare *) pv;
+    size_t i = 0;
 
     // check the counter
-    if (p->counter >= p->max_counter)
+    if (ps->counter >= ps->max_counter)
     {
         // reached maximum number of allowed likelihood evaluations
         // per optimization iteration
@@ -1389,28 +1735,97 @@ double get_neut_lnL(const gsl_vector *x, void *pv)
     }
 
     // update counter
-    p->counter++;
+    ps->counter++;
 
-    // update the content of p from x
-    undo_transform(p->pm, x);
+    // update the content of ps from x
+    undo_transform(ps, x);
 
-    set_neut_lnL(p);
+    // check the validity of probabilities for discretized DFE
+    if (ps->p[0].pm->model == 4)
+    {
+        for (i = 0; i < ps->no_data; i++)
+        {
+            if (ps->p[i].pm->sel_params[ps->p[i].pm->sel_fixed] < 0
+                || ps->p[i].pm->sel_params[ps->p[i].pm->sel_fixed] > 1)
+            {
+                // return (GSL_NAN);
+                return (DBL_MAX);
+            }
+        }
+    }
 
-    return (- p->lnL_neut);
+    set_sel_lnL_share(ps);
+
+    return ( - ps->lnL_sel);
 }
 
-double get_lnL(const gsl_vector *x, void *pv)
+double set_neut_lnL_share_file(ParamsShare *ps, size_t i)
+{
+	// calculate expectations
+	set_neut_expec(*ps->p[i].pm, &ps->p[i].expec_neut);
+	// add ancestral error
+	set_anc_expec(ps->p[i].pm->eps_an, ps->p[i].pm->n, &ps->p[i].expec_neut);
+	ps->p[i].lnL_neut = get_lnL_aux(&ps->p[i], ps->p[i].no_neut,
+									ps->p[i].counts_neut, ps->p[i].expec_neut);
+
+	return (ps->p[i].lnL_neut);
+}
+
+void set_neut_lnL_share(ParamsShare *ps)
+{
+    size_t i = 0;
+    ps->lnL_neut = 0;
+
+    // for which files do I calculate the likelihood?
+    if (ps->which == -1)
+    {
+    	for (i = 0; i < ps->no_data; i++)
+		{
+			ps->lnL_neut += set_neut_lnL_share_file(ps, i);
+		}
+    }
+    else
+    {
+    	ps->lnL_neut = set_neut_lnL_share_file(ps, ps->which);
+    }
+}
+
+double get_neut_lnL_share(const gsl_vector *x, void *pv)
+{
+    ParamsShare *ps = (ParamsShare *) pv;
+
+    // check the counter
+    if (ps->counter >= ps->max_counter)
+    {
+        // reached maximum number of allowed likelihood evaluations
+        // per optimization iteration
+        // so GSL might be stuck - force it to stop by returning Inf
+        return (DBL_MAX);
+    }
+
+    // update counter
+    ps->counter++;
+
+    // update the content of ps from x
+    undo_transform(ps, x);
+
+    set_neut_lnL_share(ps);
+
+    return (- ps->lnL_neut);
+}
+
+double get_lnL_share(const gsl_vector *x, void *pv)
 {
     double ln = 0;
-    Params *p = (Params *) pv;
+    ParamsShare *ps = (ParamsShare *) pv;
 
-    if (p->pm->neut_ln == TRUE)
+    if (ps->use_neut_ln == TRUE)
     {
-        ln += get_neut_lnL(x, pv);
+        ln += get_neut_lnL_share(x, pv);
     }
-    if (p->pm->sel_ln == TRUE)
+    if (ps->use_sel_ln == TRUE)
     {
-        ln += get_sel_lnL(x, pv);
+        ln += get_sel_lnL_share(x, pv);
     }
 
     return (ln);

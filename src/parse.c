@@ -1,5 +1,5 @@
 /*
- * polyDFE v1.11: predicting DFE and alpha from polymorphism data
+ * polyDFE v2.0: predicting DFE and alpha from polymorphism data
  * Copyright (c) 2018  Paula Tataru and Marco A.P. Franco
  *
  * This program is free software: you can redistribute it and/or modify
@@ -222,24 +222,24 @@ int parse_data(char *filename, Params *p, unsigned *n)
             if (status != EXIT_SUCCESS)
             {
                 // check if maybe divergence data is missing
-                if (status == LINE_SHORT)
-                {
-                    // n - 1 SFS + 1 length
-                    no_fields = (*n);
-                    // re-read the line to see if it matches
-                    status = parse_line(buf, no_fields, temp);
-                }
-                if (status == EXIT_SUCCESS)
-                {
-                    // mark no divergence in the data
-                    p->counts_neut[0].sfs[(*n) - 1] = -1;
-                    p->pm->div_flag = FALSE;
-                    p->pm->lambda_flag = FALSE;
-                }
-                else
-                {
-                    break;
-                }
+            	if (status == LINE_SHORT)
+            	{
+            		// n - 1 SFS + 1 length
+            		no_fields = (*n);
+            		// re-read the line to see if it matches
+            		status = parse_line(buf, no_fields, temp);
+            		if (status == EXIT_SUCCESS)
+            		{
+            			// mark no divergence in the data
+            			p->counts_neut[0].sfs[(*n) - 1] = -1;
+            			p->pm->div_flag = FALSE;
+            			p->pm->lambda_flag = FALSE;
+            		}
+            		else
+            		{
+            			break;
+            		}
+            	}
             }
 
             // verify the validity of counts stored in temp
@@ -408,7 +408,7 @@ int parse_range(ParamsModel *pm, double *temp)
     return (status);
 }
 
-int parse_init(ParamsModel *pm, double *temp, int check_range)
+int parse_init(ParamsModel *pm, double *temp, int check_range, int initial_values)
 {
     int status = EXIT_SUCCESS;
     unsigned i = 1;
@@ -421,6 +421,8 @@ int parse_init(ParamsModel *pm, double *temp, int check_range)
     // 1 is TRUE and 0 is FALSE but
     // 1 is fix and 0 is estimate
     // so I need to get 1 - temp!
+    // flag to share a parameter will then be -1
+    // as I set it to 2 in the init file
     pm->eps_an_flag = 1 - temp[i++];
     pm->eps_an = temp[i++];
     eps_cont = 1 - temp[i++];
@@ -482,31 +484,31 @@ int parse_init(ParamsModel *pm, double *temp, int check_range)
         // I only want to verify the provided init values is within the range
         // if the parameter is used as it is
         // (not estimated because of the flag or used as init)
-        status += check_lim(pm->eps_an_flag, 0, 1);
-        if (pm->eps_an_flag == FALSE || pm->initial_values == TRUE)
+        status += check_lim(pm->eps_an_flag, -1, 1);
+        if (pm->eps_an_flag == FALSE || initial_values == TRUE)
         {
             status += check_lim_update(&pm->eps_an, &pm->eps_an_min, &pm->eps_an_max,
                                                pm->eps_an_flag, "eps_an");
         }
-        status += check_lim(pm->lambda_flag, 0, 1);
-        if (pm->lambda_flag == FALSE || pm->initial_values == TRUE)
+        status += check_lim(pm->lambda_flag, -1, 1);
+        if (pm->lambda_flag == FALSE || initial_values == TRUE)
         {
             status += check_lim_update(&pm->lambda, &pm->lambda_min,
                                        &pm->lambda_max, pm->lambda_flag,
                                        "lambda");
         }
-        status += check_lim(pm->theta_bar_flag, 0, 1);
-        if (pm->theta_bar_flag == FALSE || pm->initial_values == TRUE)
+        status += check_lim(pm->theta_bar_flag, -1, 1);
+        if (pm->theta_bar_flag == FALSE || initial_values == TRUE)
         {
             status += check_lim_update(&pm->theta_bar, &pm->theta_bar_min,
                                        &pm->theta_bar_max, pm->theta_bar_flag,
                                        "theta_bar");
         }
-        status += check_lim(pm->a_flag, 0, 1);
+        status += check_lim(pm->a_flag, -1, 1);
         // allow for a to be -1 and outside range
         if (pm->a != -1)
         {
-            if (pm->a_flag == FALSE || pm->initial_values == TRUE)
+            if (pm->a_flag == FALSE || initial_values == TRUE)
             {
                 status += check_lim_update(&pm->a, &pm->a_min, &pm->a_max,
                                            pm->a_flag, "a");
@@ -518,8 +520,8 @@ int parse_init(ParamsModel *pm, double *temp, int check_range)
         {
             for (i = 0; i < pm->no_sel; i++)
             {
-                status += check_lim(pm->sel_flag[i], 0, 1);
-                if (pm->sel_flag[i] == FALSE || pm->initial_values == TRUE)
+                status += check_lim(pm->sel_flag[i], -1, 1);
+                if (pm->sel_flag[i] == FALSE || initial_values == TRUE)
                 {
                     status += check_lim_update(&pm->sel_params[i],
                                                &pm->sel_min[i], &pm->sel_max[i],
@@ -537,10 +539,10 @@ int parse_init(ParamsModel *pm, double *temp, int check_range)
             {
                 if (2*i+1 != pm->sel_fixed)
                 {
-                    status += check_lim(pm->sel_flag[2*i+1], 0, 1);
+                    status += check_lim(pm->sel_flag[2 * i + 1], 0, 1);
                 }
                 if (pm->sel_flag[2 * i + 1] == FALSE
-                                || pm->initial_values == TRUE)
+                                || initial_values == TRUE)
                 {
                     status += check_lim_update(&pm->sel_params[2 * i + 1],
                                                &pm->sel_min[2 * i + 1],
@@ -548,15 +550,15 @@ int parse_init(ParamsModel *pm, double *temp, int check_range)
                                                pm->sel_flag[2 * i + 1],
                                                "a selection parameter");
                 }
-                sum += pm->sel_params[2*i+1];
+                sum += pm->sel_params[2 * i + 1];
             }
             status += check_lim(sum, 1, 1);
         }
 
-        status += check_lim(pm->r_flag, 0, 1);
+        status += check_lim(pm->r_flag, -1, 1);
         for (j = 1; j < pm->no_groups; j++)
         {
-            if (pm->r_flag == FALSE || pm->initial_values == TRUE)
+            if (pm->r_flag == FALSE || initial_values == TRUE)
             {
                 status += check_lim_update(&pm->r[j], &pm->r_min, &pm->r_max,
                                            pm->r_flag, "r");
@@ -639,7 +641,7 @@ int no_sel_params(int model, double k)
     return (2);
 }
 
-int parse(int what, char *filename, int id, void *pv)
+int parse(int what, char *filename, int id, void *pv, int initial_values)
 {
     if (id == -1 && what != 6)
     {
@@ -759,8 +761,7 @@ int parse(int what, char *filename, int id, void *pv)
             // if parsing grouping, I have less params than I asked for
             // if parsing init, I might have more params than I asked for
             if (status != EXIT_SUCCESS && !(status == LINE_SHORT && what == 6)
-                            && !(status == LINE_LONG && (what == 1 || what == 5))
-                            )
+                            && !(status == LINE_LONG && (what == 1 || what == 5)))
             {
                 break;
             }
@@ -781,7 +782,7 @@ int parse(int what, char *filename, int id, void *pv)
                 case 1:
                 {
                     // init
-                    status = parse_init((ParamsModel *) pv, temp, TRUE);
+                    status = parse_init((ParamsModel *) pv, temp, TRUE, initial_values);
                     break;
                 }
                 case 2:
@@ -804,7 +805,7 @@ int parse(int what, char *filename, int id, void *pv)
                 case 5:
                 {
                     // init for simulation
-                    status = parse_init((ParamsModel *) pv, temp, FALSE);
+                    status = parse_init((ParamsModel *) pv, temp, FALSE, initial_values);
                     break;
                 }
                 case 6:

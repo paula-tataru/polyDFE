@@ -1,5 +1,5 @@
-### polyDFE v1.11: predicting DFE and alpha from polymorphism data
-### Copyright (c) 2016  Paula Tataru
+### polyDFE v2.0: predicting DFE and alpha from polymorphism data
+### Copyright (c) 2018  Paula Tataru
 ###
 ### This program is free software: you can redistribute it and/or modify
 ### it under the terms of the GNU General Public License as published by
@@ -23,19 +23,55 @@ mergeNames = function(x, y)
 	{
 		return(y)
 	}
-	newY = NULL
-	if (min(pos) > 1)
+	# make sure I have consecutive entries in pos
+	n = length(pos)
+	d = pos[2:n] - pos[1:(n - 1)]
+	m = min(d)
+	if (m == max(d))
 	{
-		# copy everything from before the first occurence of x
-		newY = y[1:(min(pos) - 1)]
+	    aux = list(pos)
+	    allY = list(y)
+	} else
+	{
+	    j = 1
+	    sub = 0
+	    allY = list()
+	    aux = list(pos[1])
+	    for (i in 1:(n - 1))
+	    {
+	        if (d[i] == m)
+	        {
+	            # still in the same "run"
+	            aux[[length(aux)]] = c(aux[[length(aux)]], pos[i + 1] - sub)
+	        } else
+	        {
+	            allY[[length(allY) + 1]] = y[j:(pos[i + 1] - 2)]
+	            j = pos[i + 1] - 1
+	            sub = j - 1
+	            aux[[length(aux) + 1]] = pos[i + 1] - sub
+	        }
+	    }
+	    allY[[length(allY) + 1]] = y[j:length(y)]
 	}
-	# merge the names by merging the entries where x is found
-	# with the neighbour entries to the right
-	newY = c(newY, paste(y[pos], y[pos + 1], sep = ' '))
-	if (max(pos) + 2 < length(y))
+	newY = NULL
+	allPos = aux
+	for (i in 1:length(allPos))
 	{
-		# copy everthing from after the last occurence of x
-		newY = c(newY, y[(max(pos) + 2):length(y)])
+	    pos = allPos[[i]]
+	    y = allY[[i]]
+	    if (min(pos) > 1)
+	    {
+	        # copy everything from before the first occurence of x
+	        newY = c(newY, y[1:(min(pos) - 1)])
+	    }
+	    # merge the names by merging the entries where x is found
+	    # with the neighbour entries to the right
+	    newY = c(newY, paste(y[pos], y[pos + 1], sep = ' '))
+	    if (max(pos) + 2 < length(y))
+	    {
+	        # copy everthing from after the last occurence of x
+	        newY = c(newY, y[(max(pos) + 2):length(y)])
+	    }
 	}
 	return(newY)
 }
@@ -53,10 +89,49 @@ splitBySpace = function(x)
 	{
 		y = y[-1]
 	}
+	
 	# if I have r or S_p parameters in here, they are separated by spaces
 	# merge them back
 	y = mergeNames('r', y)
 	y = mergeNames('S_p', y)
+	
+	# merge back with indicator of type of estimattion 
+	# (either missing for one file, 0 for shared, or i for file no i)
+	# first, find all numeric entries
+	pos = which(!is.na(suppressWarnings(as.numeric(y))))
+	# if all of y is numeric, than I have a line with estimated values, 
+	# so I don't do much more
+	if (length(pos) > 0 && length(pos) < length(y))
+	{
+	    # now remove them and add them as names to y
+	    newY = y
+	    names(newY) = newY
+	    names(newY)[pos + 1] = y[pos]
+	    y = newY[-pos]
+	    # if I have r, I have to update the type of estimation
+	    # TODO fix it for S_p parameters too
+	    pos = grep("r ", names(y), fixed = TRUE)
+	    if (length(pos) > 0)
+	    {
+	        # have to make sure I do this for every file estimation
+	        n = length(pos)
+	        d = pos[2:n] - pos[1:(n - 1)]
+	        m = min(d)
+	        if (m == max(d))
+	        {
+	            names(y)[pos] = names(y)[pos[1] - 1]
+	        } else      
+	        {
+	            j = which(d > m)
+	            j = c(1, j + 1, length(y))
+	            for (k in 1:(length(j) - 1))
+	            {
+	                names(y)[pos[j[k]:j[k + 1]]] = names(y)[pos[j[k]] - 1]
+	            }
+	        }    
+	    }
+	}
+	
 	return(y)
 }
 
@@ -83,22 +158,45 @@ splitEqual = function(x)
 	strsplit(x, split = " = ", fixed = T)[[1]]
 }
 
-extractInfo = function(lines, init = FALSE)
+extractInfo = function(lines)
 {
     # remove empty lines
     lines = removeEmpty(lines)
     
-    values = NULL
+    # check if I have any results printed at all
+    pos = findPos('---- Best joint likelihood found ', lines)
+    if (length(pos) == 0)
+    {
+        pos = findPos('---- Joint likelihood ', lines)
+        if (length(pos) == 0)
+        {
+            # find which command line was used
+            pos = findPos("---- Running command", lines)
+            warning(lines[pos + 1], 
+                    ": failed and no estimated paramters are given")
+            return(NULL)
+        }
+    }
     
-    # find out on what file I ran polyDFE
-    pos = findPos('-- Performing inference', lines)[1]
-    filename = strsplit(lines[pos], split = ' ')[[1]][5]
+    # extract the model
+    pos = findPos('-- Performing inference using model', lines)
+    model = strsplit(lines[pos], split = ' ')[[1]]
+    model =  model[length(model)]
+    
+    # find out on what files I ran polyDFE
+    pos = findPos('-- Performing inference on', lines)
+    filename = sapply(strsplit(lines[pos], split = ' '), function(l)l[5])
+    
+    values = list()
+    expec = list()
+    alpha = list()
+    n = numeric()
     
     # find out which are the estimated parameters
     # the info is after -- Starting local optimization
-    pos = findPos('-- Starting local optimization', lines)[1] + 1
+    pos = findPos('-- Starting local optimization', lines)
     
-    if (is.na(pos))
+    if (length(pos) == 0)
     {
         # I didn't have any -- Starting local optimization
         # nothing was estimated then!
@@ -108,292 +206,166 @@ extractInfo = function(lines, init = FALSE)
         lk = strsplit(lines[pos], split = ' ')[[1]]
         lk = as.numeric(lk[length(lk)])
         estimated = NA
-        grad = NA
-        # extract the model, it's in position 2
-        model = strsplit(lines[pos + 1], split = ': ')[[1]][2]
+        criteria = NA
     } else
     {
         # figure out what parameters have been estimated
-        # for that, I need to see what kind of likelihood optimziation I had
-        # did I do joint opitmization? All info is there
-        posJoint = findPos('-- Optimizing all parameters', lines)[1] + 1
-        posNeut = NA
-        posSel = NA
-        if (is.na(posJoint))
+        # for that, find the lines containing information of the estimated parameters
+        # starts with it (from iteration)
+        # if I run basinhopping, I have more of that
+        # so restrict to the first occurence of Starting local optimization
+        pos = c(pos, length(lines))
+        runs = findPos("it ", lines[1:pos[2]])
+        # get rid of other it
+        # the result should contain status
+        runs = runs[findPos("status", lines[runs])]
+        estimated = c()
+        for (r in runs)
         {
-            # I only had separate optimizations
-            estimatedNeut = numeric()
-            estimatedSel = numeric()
-            posNeut = findPos('-- Optimizing neutral parameters', lines)[1] + 1
-            if (!is.na(posNeut))
-            {
-                estimatedNeut = splitBySpace(lines[posNeut])
-                # the first and last 4 contain
-                # iteration number, ln lk, gradient and status
-                estimatedNeut = estimatedNeut[2:(length(estimatedNeut) - 4)]        
-            }
-            posSel = findPos('-- Optimizing selected parameters', lines)[1] + 1
-            if (!is.na(posSel))
-            {
-                estimatedSel = splitBySpace(lines[posSel])
-                # the first and last 4 contain
-                # iteration number, ln lk, gradient and status
-                estimatedSel = estimatedSel[2:(length(estimatedSel) - 4)]        
-            }
-            estimated = c(estimatedNeut, estimatedSel)
-        } 
-        # if all are na, this is output from polyDFE v1.11
-        if (all(is.na(c(posJoint, posNeut, posSel)))
-            || !is.na(posJoint))
-        {
-            if (!is.na(posJoint))
-            {
-                estimated = splitBySpace(lines[posJoint])    
-            } else
-            {
-                estimated = splitBySpace(lines[pos])
-            }
-            
-            # the first and last 4 contain
-            # iteration number, ln lk, gradient and status
-            estimated = estimated[2:(length(estimated) - 4)]
+            estimated = c(estimated, splitBySpace(lines[r]))
         }
-        
+        # get rid of it, ln lk, grad, size, status
+        pos = which(estimated %in% c("it", "ln", "lk", "grad", "size", "status"))
+        estimated = estimated[-pos]
+         
         # find out what is the best likelihood found
-        # what model I used
-        # and what are the parameters
         # get the position of best likelihood
         pos = findPos('---- Best joint likelihood', lines)
         
-        # extract the likelihood and gradient
+        # extract the likelihood and criteria (gradient or size)
         lk = strsplit(lines[pos], split = ' ')[[1]]
         # remove empty entries
         lk = lk[which(unlist(lapply(lk, nchar)) > 0, arr.ind = TRUE)]
-        grad = as.numeric(lk[length(lk)])
+        criteria = as.numeric(lk[length(lk)])
         lk = as.numeric(lk[length(lk) - 3])
-        # extract the model, it's in position 2
-        model = strsplit(lines[pos + 1], split = ': ')[[1]][2]
     }
     
-    # extract the rest of the parameters; I have 6 lines left
-    for (i in seq(from = pos + 2, to = pos + 6, by = 2))
+    # extract the rest of the parameters
+    # I have to do this for all files
+    allPos = findPos('---- Results for ', lines)
+    for (j in 1:length(allPos))
     {
-        # get the parameters on this line
-        params = c(names(values), splitBySpace(lines[i]))
-        # get the values from the next line
-        values = c(values, as.numeric(splitBySpace(lines[i + 1])))
-        names(values) = params
-    }
-    
-    if (init)
-    {
-        # I actually want the parameters estimated from the init values
-        pos = findPos('---- Using provided initial values', lines)
-        if (length(pos) == 0)
+        pos = allPos[j]
+        values[[j]] = numeric()
+        for (i in seq(from = pos + 2, to = pos + 6, by = 2))
         {
-            # no init was used
-            warning("polyDFE was not run with the provided initial values")
-            return(NULL)
+            # get the parameters on this line
+            params = c(names(values[[j]]), splitBySpace(lines[i]))
+            # get the values from the next line
+            values[[j]] = c(values[[j]], as.numeric(splitBySpace(lines[i + 1])))
+            names(values[[j]]) = params
+        }    
+    }
+    
+    for (i in 1:length(values))
+    {
+        # add eps_an and eps_cont if missing
+        if (!"eps_an" %in% names(values[[i]]))
+        {
+            values[[i]] = c("eps_an" = 0, values[[i]])
         }
-        # move on to starting the optimization
-        # using the initial values is always the first one
-        pos = findPos('-- Starting local optimization', lines)[1] + 1
-        posJoint = findPos('-- Optimizing all parameters', lines)[1] + 1
-        posNeut = findPos('-- Optimizing neutral parameters', lines)[1] + 1
-        posSel = findPos('-- Optimizing selected parameters', lines)[1] + 1
-        if (!is.na(pos))
+        if (!"eps_cont" %in% names(values[[i]]))
         {
-            if (is.na(posJoint))
+            values[[i]] = c(values[[i]][1], "eps_cont" = 0, values[[i]][-1])
+        }
+        # add p_b and S_b if missing
+        # only for models B - C, which also contain paramter b
+        if (!"p_b" %in% names(values[[i]]) && (model == 'B' || model == 'C'))
+        {
+            pos = which(names(values[[i]]) == "b")
+            if (length(pos) > 0)
             {
-                # I only had seperate optimizations
-                if (!is.na(posNeut))
-                {
-                    # find the last line of the output
-                    # it has to end with a line that starts with --
-                    end = findPos('--', lines)
-                    end = end[which(end > posNeut)][1]
-                    # find the last line that had only numbers
-                    for (i in end:posNeut)
-                    {
-                        aux = strsplit(lines[i], split = ' ')[[1]]
-                        # get rid of empty entries
-                        aux = removeEmpty(aux)
-                        aux = tryCatch(as.numeric(aux),
-                                       warning = function(w) return(w))
-                        if (typeof(aux) != "list")
-                        {
-                            # valid conversion, get results
-                            # the first and last 3 contain
-                            # iteration number, lnlk, gradient and status
-                            values[estimatedNeut] = aux[2:(length(aux) - 3)]
-                            break
-                        }
-                    }
-                }
-                if (!is.na(posSel))
-                {
-                    # find the last line of the output
-                    # it has to end with a line that starts with --
-                    end = findPos('--', lines)
-                    end = end[which(end > posSel)][1]
-                    # find the last line that had only numbers
-                    for (i in end:posSel)
-                    {
-                        aux = strsplit(lines[i], split = ' ')[[1]]
-                        # get rid of empty entries
-                        aux = removeEmpty(aux)
-                        aux = tryCatch(as.numeric(aux),
-                                       warning = function(w) return(w))
-                        if (typeof(aux) != "list")
-                        {
-                            # valid conversion, get results
-                            # the first and last 3 contain
-                            # iteration number, lnlk, gradient and status
-                            values[estimatedSel] = aux[2:(length(aux) - 3)]
-                            break
-                        }
-                    }
-                }
-                # I have to figure out likelihood and gradient
-                posLk = findPos("-- Joint likelihood", lines)[1]
-                lk = strsplit(lines[posLk], split = ' ')[[1]]
-                # remove empty entries
-                lk = lk[which(unlist(lapply(lk, nchar)) > 0, arr.ind = TRUE)]
-                grad = as.numeric(lk[7])
-                lk = as.numeric(lk[4])
+                values[[i]] = c(values[[i]][1:pos],
+                                "p_b" = 0, "S_b" = 0,
+                                values[[i]][(pos + 1):length(values[[i]])])
             }
+        }
+        # add a if missing
+        if (!"a" %in% names(values[[i]]))
+        {
+            pos = which(names(values[[i]]) == "theta_bar")
+            values[[i]] = c(values[[i]][1:pos],
+                            "a" = -1,
+                            values[[i]][(pos + 1):length(values[[i]])])
+        }
+        # add lambda if missing
+        if (!"lambda" %in% names(values[[i]]))
+        {
+            pos = which(names(values[[i]]) == "eps_cont")
+            values[[i]] = c(values[[i]][1:pos],
+                            "lambda" = 0,
+                            values[[i]][(pos + 1):length(values[[i]])])
+        }
+    }
+    
+    # I have to do the following for every file in filename
+    for (i in 1:length(filename))
+    {
+        # extract expectations
+        # expectations are in the order
+        # P_neut, P_sel, D_neut, D_sel, mis_neut, mis_sel
+        allPos = findPos('---- Expected', lines)
+        expec[[i]] = numeric()
+        if (length(allPos) > 0)
+        {
+            j = length(allPos) / length(filename)
+            pos = allPos[(j * (i - 1) + 1):(j * i)]
+            expec[[i]] = numeric()
             
-            # if all are na, this is output from polyDFE v1.11
-            if (all(is.na(c(posJoint, posNeut, posSel)))
-                || !is.na(posJoint))
+            # first, figure out n
+            n = c(n, pos[2] - pos[1])
+            # also, figure out where expectations end
+            pos = c(pos[1], pos[2], pos[2] + n[i])
+            for (j in 1:2)
             {
-                # find the last line of the output
-                # it has to end with a line that starts with --
-                end = findPos('--', lines)
-                if (!is.na(posJoint))
-                {
-                    end = end[which(end > posJoint)][1]
-                } else
-                {
-                    end = end[which(end > pos)][1]
-                }
-                # find the last line that had only numbers
-                for (i in end:pos)
-                {
-                    aux = strsplit(lines[i], split = ' ')[[1]]
-                    # get rid of empty entries
-                    aux = removeEmpty(aux)
-                    aux = tryCatch(as.numeric(aux),
-                                   warning = function(w) return(w))
-                    if (typeof(aux) != "list")
-                    {
-                        # valid conversion, get results
-                        # the first and last 3 contain
-                        # iteration number, lnlk, gradient and status
-                        values[estimated] = aux[2:(length(aux) - 3)]
-                        # update likelihood and gradient
-                        lk = as.numeric(aux[length(aux) - 2])
-                        grad = as.numeric(aux[length(aux) - 1])
-                        break
-                    }
-                }
+                expec[[i]] = rbind(expec[[i]],
+                                   unlist(lapply(lines[(pos[j] + 1):(pos[j + 1] - 1)],
+                                                 function(x)
+                                                     as.numeric(splitEqual(x)[2]))))
             }
-        } 
-    }
-    
-    # add eps_an and eps_cont if missing
-    if (!"eps_an" %in% names(values))
-    {
-        values = c("eps_an" = 0, values)
-    }
-    if (!"eps_cont" %in% names(values))
-    {
-        values = c(values[1], "eps_cont" = 0, values[-1])
-    }
-    # add p_b and S_b if missing
-    # only for models B - C, which also contain paramter b
-    if (!"p_b" %in% names(values) && (model == 'B' || model == 'C'))
-    {
-        pos = which(names(values) == "b")
-        if (length(pos) > 0)
+            expec[[i]] = cbind(expec[[i]], c(NA, NA), c(NA, NA))
+            colnames(expec[[i]]) = c(paste0("E[P_z(", 1:(n[i] - 1), ")]"), "E[D_z]", "E[mis_z]")
+            rownames(expec[[i]]) = c("neut", "sel")
+            # add E[D_neut] and E[D_sel]
+            pos = findPos('E[D_neut] = ', lines)
+            if (length(pos) > 0)
+            {
+                pos = pos[i]
+                expec[[i]][1, n[i]] = as.numeric(splitEqual(lines[pos])[2])
+                expec[[i]][2, n[i]] = as.numeric(splitEqual(lines[pos + 1])[2])
+            }
+            # add E[mis_neut] and E[mis_sel]
+            pos = findPos('E[mis_neut] = ', lines)
+            if (length(pos) > 0)
+            {
+                pos = pos[i]
+                expec[[i]][1, n[i] + 1] = as.numeric(splitEqual(lines[pos])[2])
+                expec[[i]][2, n[i] + 1] = as.numeric(splitEqual(lines[pos + 1])[2])
+            }
+        }
+        
+        # extract alpha
+        allPos = findPos('---- alpha', lines)
+        alpha[[i]] = numeric()
+        if (length(allPos) > 0)
         {
-            values = c(values[1:pos],
-                       "p_b" = 0,
-                       "S_b" = 0,
-                       values[(pos + 1):length(values)])
+            j = length(allPos) / length(filename)
+            pos = allPos[(j * (i - 1) + 1):(j * i)]
+            for (p in pos)
+            {
+                aux = splitEqual(lines[p])
+                alpha[[i]] = c(alpha[[i]], as.numeric(aux[2]))
+                names(alpha[[i]])[length(alpha[[i]])] = strsplit(aux[1], split = "---- ")[[1]][2]
+            }
         }
     }
-    # add a if missing
-    if (!"a" %in% names(values))
-    {
-        pos = which(names(values) == "theta_bar")
-        values = c(values[1:pos],
-                   "a" = -1,
-                   values[(pos + 1):length(values)])
-    }
-    # add lambda if missing
-    if (!"lambda" %in% names(values))
-    {
-        pos = which(names(values) == "eps_cont")
-        values = c(values[1:pos],
-                   "lambda" = 0,
-                   values[(pos + 1):length(values)])
-    }
-    
-    # extract expectations
-    # expectations are in the order
-    # P_neut, P_sel, D_neut, D_sel, mis_neut, mis_sel
-    pos = findPos('---- Expected', lines)
-    # first, figure out n
-    n = pos[2] - pos[1]
-    # also, figure out where expectations end
-    pos = c(pos[1], pos[2], pos[2] + n)
-    expec = NULL
-    for (i in 1:2)
-    {
-        expec = rbind(expec,
-                      unlist(lapply(lines[(pos[i] + 1):(pos[i + 1] - 1)],
-                                    function(x)
-                                        as.numeric(splitEqual(x)[2]))))
-    }
-    expec = cbind(expec, c(NA, NA), c(NA, NA))
-    colnames(expec) = c(paste0("E[P_z(", 1:(n - 1), ")]"), "E[D_z]", "E[mis_z]")
-    rownames(expec) = c("neut", "sel")
-    # add E[D_neut] and E[D_sel]
-    pos = findPos('E[D_neut] = ', lines)
-    if (length(pos) == 1)
-    {
-        expec[1, n] = as.numeric(splitEqual(lines[pos])[2])
-        expec[2, n] = as.numeric(splitEqual(lines[pos + 1])[2])
-    }
-    # add E[mis_neut] and E[mis_sel]
-    pos = findPos('E[mis_neut] = ', lines)
-    if (length(pos) == 1)
-    {
-        expec[1, n + 1] = as.numeric(splitEqual(lines[pos])[2])
-        expec[2, n + 1] = as.numeric(splitEqual(lines[pos + 1])[2])
-    }
-    
-    # extract alpha
-    pos = findPos('---- alpha', lines)
-    alpha = NULL
-    for (p in pos)
-    {
-        aux = splitEqual(lines[p])
-        alpha = c(alpha, as.numeric(aux[2]))
-        names(alpha)[length(alpha)] = strsplit(aux[1], split = "---- ")[[1]][2]
-    }
-    
-    # make sure the estimated parameters
-    # are in the same order as in the names of values
-    estimated = estimated[order(match(estimated , names(values)))]
     
     return(
         list(
             input = filename,
             model = model,
             lk = lk,
-            grad = grad,
+            criteria = criteria,
             values = values,
             estimated = estimated,
             n = n,
@@ -403,7 +375,7 @@ extractInfo = function(lines, init = FALSE)
     )
 }
 
-parseOutput = function(filename, init = FALSE)
+parseOutput = function(filename)
 {
 	# extract the model, estimated parameters and likelihood
 	# from the file
@@ -419,19 +391,25 @@ parseOutput = function(filename, init = FALSE)
 	close(f)
 	
 	# find which lines contain ---- Performing inference on
-	pos = findPos('---- Performing inference on', lines)
+	pos = findPos('---- Running command', lines)
 	
 	# add last line at the end
-	pos = c(pos, length(lines))
+	pos = c(pos, length(lines) + 1)
 	
 	# go over each run and extract the info
 	res = lapply(1:(length(pos) - 1),
-					 function(i) extractInfo(lines[pos[i]:(pos[i + 1] - 1)], init))
+					 function(i) extractInfo(lines[pos[i]:(pos[i + 1] - 1)])) 
+	# remove NULL entries
+	pos = which(sapply(res, is.null))
+	if (length(pos) > 0)
+	{
+	    res = res[-pos]    
+	}
 	
 	return(res)
 }
 
-parseSFSData = function(filename)
+parseSFSData = function(filename, sum = TRUE)
 {
 	f = file(filename)
 	lines = readLines(f)
@@ -451,12 +429,22 @@ parseSFSData = function(filename)
 	
 	info_line = na.omit(as.numeric(unlist(strsplit(lines[i], "[^0-9]+"))))
 	
-	# sum the fragments
-	data = rbind(colSums(data[1:info_line[1],]),
-					 colSums(data[(info_line[1] + 1):(info_line[1] + info_line[2]),]))
+	if (sum)
+	{
+	    # sum the fragments
+	    data = rbind(colSums(data[1:info_line[1],]),
+         colSums(data[(info_line[1] + 1):(info_line[1] + info_line[2]),]))
+	    rownames(data) = c("neut", "sel")
+	} else
+	{
+	    data = rbind(data[1:info_line[1], ],
+             data[(info_line[1] + 1):(info_line[1] + info_line[2]),])    
+	    rownames(data) = c(paste("neut", 1:info_line[1]),
+	                       paste("sel", 1:info_line[2]))
+	}
 	
 	# give it names
-	rownames(data) = c("neut", "sel")
+	
 	sfs = paste0("p(", 1:(info_line[3] - 1), ")")
 	if (info_line[3] + 2 == ncol(data))
 	{
@@ -493,138 +481,143 @@ parseDivergenceData = function(filename)
 getQuantiles = function(est)
 {
     model = est$model
-    values = est$values
+    quant = list()
     
-    if (model == "D")
+    for (j in 1:length(est$input))
     {
-        return(list(q = NULL, p = NULL, m = NULL))
-    }
-    
-    sep = 0.0005
-    p = seq(from = 0.0, to = 1, by = sep)
-    p[1] = 1 - 0.99999999
-    p[length(p)] = 0.99999999
-    n = length(p)
-    q = c()
-    # I have to store the corresponding probabilities too
-    prob = c()
-    if (model != 'D')
-    {
-        if (model == 'A')
+        values = est$values[[j]]
+        
+        if (model == "D")
         {
-            S_max = values["S_max"]
-            S_bar = values["S_bar"]
-        } else
-        {
-            S_max = 0
-            S_bar = values["S_d"]
+            return(list(q = NULL, p = NULL, m = NULL))
         }
-        q = S_max - qgamma(p, shape = values["b"], 
-                           scale = (S_max - S_bar) / values["b"], 
-                           lower.tail = FALSE)
-        # last quantile should in fact be S_max
-        q[length(q)] = S_max
-        prob = rep(sep, n - 1)
-        if (model == 'B')
+        
+        sep = 0.0005
+        p = seq(from = 0.0, to = 1, by = sep)
+        p[1] = 1 - 0.99999999
+        p[length(p)] = 0.99999999
+        n = length(p)
+        q = c()
+        # I have to store the corresponding probabilities too
+        prob = c()
+        if (model != 'D')
         {
-            q = c(q, values['S_b'])
-            prob = prob * (1 - values["p_b"])
-            prob = c(prob, values["p_b"])
-        } else if (model == 'C')
-        {
-            q = c(q[2:length(q)], qexp(p, rate = 1 / values['S_b']))
-            prob = prob * (1 - values["p_b"])
-            prob = c(prob, rep(sep, n - 1) * values["p_b"])
+            if (model == 'A')
+            {
+                S_max = values["S_max"]
+                S_bar = values["S_bar"]
+            } else
+            {
+                S_max = 0
+                S_bar = values["S_d"]
+            }
+            q = S_max - qgamma(p, shape = values["b"], 
+                               scale = (S_max - S_bar) / values["b"], 
+                               lower.tail = FALSE)
+            # last quantile should in fact be S_max
+            q[length(q)] = S_max
+            prob = rep(sep, n - 1)
+            if (model == 'B')
+            {
+                q = c(q, values['S_b'])
+                prob = prob * (1 - values["p_b"])
+                prob = c(prob, values["p_b"])
+            } else if (model == 'C')
+            {
+                q = c(q[2:length(q)], qexp(p, rate = 1 / values['S_b']))
+                prob = prob * (1 - values["p_b"])
+                prob = c(prob, rep(sep, n - 1) * values["p_b"])
+            }
         }
-    }
-    # make the quantiles unique
-    newQ = q[1]
-    newP = prob[1]
-    for (i in 2:(length(q) - 1))
-    {
+        # make the quantiles unique
+        newQ = q[1]
+        newP = prob[1]
+        for (i in 2:(length(q) - 1))
+        {
+            if (q[i] == q[i - 1])
+            {
+                newP[length(newP)] = newP[length(newP)] + prob[i]
+            } else
+            {
+                newQ = c(newQ, q[i])
+                newP = c(newP, prob[i])
+            }
+        }
+        # deal with the last interval - increase the last quantile if equal
+        i = length(q)
         if (q[i] == q[i - 1])
         {
-            newP[length(newP)] = newP[length(newP)] + prob[i]
-        } else
+            q[i] = q[i] + 1e-7
+        } 
+        newQ = c(newQ, q[i])
+        q = newQ
+        prob = newP
+        
+        # check probabilities sum to 1
+        if (!isTRUE(all.equal(sum(prob), 1)))
         {
-            newQ = c(newQ, q[i])
-            newP = c(newP, prob[i])
+            stop("Numerical integration failed, probabilities don't sum up to 1.")
         }
-    }
-    # deal with the last interval - increase the last quantile if equal
-    i = length(q)
-    if (q[i] == q[i - 1])
-    {
-        q[i] = q[i] + 1e-7
-    } 
-    newQ = c(newQ, q[i])
-    q = newQ
-    prob = newP
-    
-    # check probabilities sum to 1
-    if (!isTRUE(all.equal(sum(prob), 1)))
-    {
-        stop("Numerical integration failed, probabilities don't sum up to 1.")
+        
+        # calculate mid-points
+        mid = (q[1:(length(q) - 1)] + q[2:length(q)]) / 2
+        quant[[j]] = list(q = q, p = prob, m = mid)
     }
     
-    # calculate mid-points
-    mid = (q[1:(length(q) - 1)] + q[2:length(q)]) / 2
-    
-    return(list(q = q, p = prob, m = mid))
+    return(quant)
 }
 
 altIntegrate = function(f, lower, upper, quantiles, ...)
 {
-    q = quantiles$q
-    # sum up the probabilties for the quantiles that are between lower and upper
-    pos = which(lower <= q & q <= upper)
-    if (length(pos) == 0)
-    {
-        return(0)
-    }
-    # mid and prob i is for interval [i, i + 1]
-    # that means that I always have to skip the last entry in pos
-    pos = pos[-length(pos)]
-    # sometimes, f returns -Inf or NAN 
-    # and then the whole sum is -Inf / NAN
-    # I need to fix that and replace ir with 0
-    eval_f = f(quantiles$m[pos], ...)
-    j = which(eval_f == -Inf | is.na(eval_f))
+  q = quantiles$q
+  # sum up the probabilties for the quantiles that are between lower and upper
+  pos = which(lower <= q & q <= upper)
+  if (length(pos) == 0)
+  {
+      return(0)
+  }
+  # mid and prob i is for interval [i, i + 1]
+  # that means that I always have to skip the last entry in pos
+  pos = pos[-length(pos)]
+  # sometimes, f returns -Inf and then the whole sum is -Inf
+  # I need to fix that and replace -Inf with 0
+  eval_f = f(quantiles$m[pos], ...)
+  j = which(eval_f == -Inf)
+  if (length(j) > 0)
+  {
+    eval_f[j] = 0
+  }
+  value = sum(quantiles$p[pos] * eval_f)
+  # now I have to deal with the cases where lower and upper
+  # are found between quantiles and I need to split an interval
+  if (lower > q[1] && !(lower %in% q))
+  {
+    i = which(lower > q)
+    i = length(i)
+    prop = (q[i + 1] - lower) / (q[i + 1] - q[i])
+    eval_f = f(quantiles$m[i], ...)
+    j = which(eval_f == -Inf)
     if (length(j) > 0)
     {
-        eval_f[j] = 0
+      eval_f[j] = 0
     }
-    value = sum(quantiles$p[pos] * eval_f)
-    # now I have to deal with the cases where lower and upper
-    # are found between quantiles and I need to split an interval
-    if (lower > q[1] && !(lower %in% q))
+    value = value + prop * quantiles$p[i] * eval_f
+  }
+  if (upper < q[length(q)] && !(upper %in% q))
+  {
+    i = which(upper < q)
+    i = i[1] - 1
+    prop = (upper - q[i]) / (q[i + 1] - q[i])
+    eval_f = f(quantiles$m[i], ...)
+    j = which(eval_f == -Inf)
+    if (length(j) > 0)
     {
-        i = which(lower > q)
-        i = length(i)
-        prop = (q[i + 1] - lower) / (q[i + 1] - q[i])
-        eval_f = f(quantiles$m[i], ...)
-        j = which(eval_f == -Inf | is.na(eval_f))
-        if (length(j) > 0)
-        {
-            eval_f[j] = 0
-        }
-        value = value + prop * quantiles$p[i] * eval_f
+      eval_f[j] = 0
     }
-    if (upper < q[length(q)] && !(upper %in% q))
-    {
-        i = which(upper < q)
-        i = i[1] - 1
-        prop = (upper - q[i]) / (q[i + 1] - q[i])
-        eval_f = f(quantiles$m[i], ...)
-        j = which(eval_f == -Inf | is.na(eval_f))
-        if (length(j) > 0)
-        {
-            eval_f[j] = 0
-        }
-        value = value + prop * quantiles$p[i] * eval_f
-    }
-    
-    return(value)
+    value = value + prop * quantiles$p[i] * eval_f
+  }
+  
+  return(value)
 }
 
 extractSP = function(values)
@@ -670,105 +663,114 @@ getDiscretizedDFE = function(estimates, sRanges = c(-100, -10, -1, 0, 1, 10))
     model = estimates$model
     values = estimates$values
     
-    # the get the discretized DFE, I use the CDF functions
-    if (model == "A")
+    # run the following for all the input files
+    dfe = numeric()
+    for (i in 1:length(estimates$input))
     {
-        # displaced reflected Gamma
-        cdf = cdfRefDisGamma(sRanges, values["S_bar"], values["b"], values["S_max"])
-    } else if (model == "B" || model == "C")
-    {
-        # I have to add 0 to sRanges if it's not part of it
-        newRanges = sort(unique(c(sRanges, 0)))
-        pos = which(newRanges == 0)
-        # displaced Gamma for the negative side
-        cdfDel = ((1 - values["p_b"]) 
-                  * cdfRefDisGamma(newRanges[1:pos], values["S_d"], values["b"]))
-        # positive side
-        if (model == "B")
+        # to get the discretized DFE, I use the CDF functions
+        if (model == "A")
         {
-            cdfBen = rep(values["p_b"], length(newRanges) - pos)
-            pos = which(newRanges[pos:length(newRanges)] <= values["S_b"])
-            pos = pos[length(pos)] - 1
-            cdfBen[1:pos] = 0
+            # displaced reflected Gamma
+            cdf = cdfRefDisGamma(sRanges, values[[i]]["S_bar"], 
+                                 values[[i]]["b"], values[[i]]["S_max"])
+        } else if (model == "B" || model == "C")
+        {
+            # I have to add 0 to sRanges if it's not part of it
+            newRanges = sort(unique(c(sRanges, 0)))
+            pos = which(newRanges == 0)
+            # displaced Gamma for the negative side
+            cdfDel = ((1 - values[[i]]["p_b"]) 
+                      * cdfRefDisGamma(newRanges[1:pos], 
+                                       values[[i]]["S_d"], values[[i]]["b"]))
+            # positive side
+            if (model == "B")
+            {
+                cdfBen = rep(values[[i]]["p_b"], length(newRanges) - pos)
+                pos = which(newRanges[pos:length(newRanges)] <= values[[i]]["S_b"])
+                pos = pos[length(pos)] - 1
+                cdfBen[1:pos] = 0
+            } else
+            {
+                # exponenetial for the positive side
+                cdfBen = (values[[i]]["p_b"] 
+                          * pexp(newRanges[(pos + 1):length(newRanges)], 
+                                 rate = 1 / values[[i]]["S_b"]))
+            }
+            cdf = c(cdfDel, cdfDel[length(cdfDel)] + cdfBen)
+            # if 0 was not part of the ranges, I have to fix that
+            if (!(0 %in% sRanges))
+            {
+                cdf = c(# the deleterious part up to the value before 0
+                    cdfDel[1:(length(cdfDel) - 1)], 
+                    # the beneficial part 
+                    cdfDel[length(cdfDel)] + cdfBen)
+            }
         } else
         {
-            # exponenetial for the positive side
-            cdfBen = (values["p_b"] 
-                      * pexp(newRanges[(pos + 1):length(newRanges)], 
-                             rate = 1 / values["S_b"]))
+            # model D
+            cdf = rep(0, length(sRanges))
+            # extract the S_p values
+            sp = extractSP(values[[i]])
+            for (i in 1:length(sp))
+            {
+                pos = which(sRanges > sp[i])
+                cdf[pos] = cdf[pos] + values[[i]][paste("S_p", sp[i])]
+            }
         }
-        cdf = c(cdfDel, cdfDel[length(cdfDel)] + cdfBen)
-        # if 0 was not part of the ranges, I have to fix that
-        if (!(0 %in% sRanges))
-        {
-            cdf = c(# the deleterious part up to the value before 0
-                cdfDel[1:(length(cdfDel) - 1)], 
-                # the beneficial part 
-                cdfDel[length(cdfDel)] + cdfBen)
-        }
-    } else
-    {
-        # model D
-        cdf = rep(0, length(sRanges))
-        # extract the S_p values
-        sp = extractSP(values)
-        for (i in 1:length(sp))
-        {
-            pos = which(sRanges > sp[i])
-            cdf[pos] = cdf[pos] + values[paste("S_p", sp[i])]
-        }
+        dfe = rbind(dfe, cdf[2:length(cdf)] - cdf[1:(length(cdf) - 1)])
     }
-    dfe = cdf[2:length(cdf)] - cdf[1:(length(cdf) - 1)]
     
     # check it sums to almost 1
-    if (!isTRUE(all.equal(sum(dfe), 1)))
+    if (!isTRUE(all.equal(rowSums(dfe), rep(1, nrow(dfe)))))
     {
-        warning("Discretized DFE sums to ", sum(dfe), 
-                "\n\tDiscretized DFE has been rescaled to sum to 1.")
+        warning("Discretized DFEs sum to ", rowSums(dfe), 
+                "\n\tDiscretized DFEs have been rescaled to sum to 1.")
     }
-    dfe = dfe / sum(dfe)
+    dfe = dfe / rowSums(dfe)
     
-    names(dfe) = toNames(sRanges[2:(length(sRanges) - 1)])
+    colnames(dfe) = toNames(sRanges[2:(length(sRanges) - 1)])
+    rownames(dfe) = estimates$input
+    
     return(dfe)
 }
 
 getModelName = function(estimates)
 {
-	modelName = estimates$model
-	if (estimates$model == "A")
-	{
-		if (!"S_max" %in% estimates$estimated && estimates$values["S_max"] == 0)
-		{
-			modelName = paste(modelName, "del")
-		}
-	}
-	if (estimates$model == "B" || estimates$model == "C")
-	{
-		if (!"p_b" %in% estimates$estimated && estimates$values["p_b"] == 0)
-		{
-			modelName = paste(modelName, "del")
-		}
-	}
-	pos = grep("r ", names(estimates$values))
-	if (!"r" %in% estimates$estimated 
-		 	&& isTRUE(all.equal(estimates$values[pos], 
-		 	                    rep(1, length(pos)), 
-		 	                    check.attributes = FALSE)))
-	{
-		modelName = paste(modelName, "- r")
-	} else
-	{
-	    modelName = paste(modelName, "+ r")
-	}
-	if (!"eps_an" %in% estimates$estimated && estimates$values["eps_an"] == 0)
-	{
-		modelName = paste(modelName, "- eps")
-	} else
-	{
-	    modelName = paste(modelName, "+ eps")
-	}
-	
-	return(modelName)
+    modelName = estimates$model
+    if (estimates$model == "A")
+    {
+        if (!"S_max" %in% estimates$estimated && estimates$values["S_max"] == 0)
+        {
+            modelName = paste(modelName, "del")
+        }
+    }
+    if (estimates$model == "B" || estimates$model == "C")
+    {
+        if (!"p_b" %in% estimates$estimated && estimates$values["p_b"] == 0)
+        {
+            modelName = paste(modelName, "del")
+        }
+    }
+    pos = grep("r ", names(estimates$values))
+    if (!"r" %in% estimates$estimated 
+        && isTRUE(all.equal(estimates$values[pos], 
+                            rep(1, length(pos)), 
+                            check.attributes = FALSE)))
+    {
+        modelName = paste(modelName, "- r")
+    } else
+    {
+        modelName = paste(modelName, "+ r")
+    }
+    if (!"eps_an" %in% estimates$estimated && estimates$values["eps_an"] == 0)
+    {
+        modelName = paste(modelName, "- eps")
+    } else
+    {
+        modelName = paste(modelName, "+ eps")
+    }
+    
+    return(modelName)
 }
 
 getDivergenceExpectation = function(S)
@@ -855,13 +857,11 @@ getMisattributedPolyExpectation = function(S, n)
     return(aux)
 }
 
-hasPosSel = function(est)
+hasPosSel = function(model, values)
 {
-    model = est$model
-    values = est$values
 	if (model == 'A')
 	{
-		return(!(is.na(values['S_max']) || values['S_max'] == 0))
+		return(!(is.na(values['S_max'] || values['S_max'] == 0)))
 	}
 	if (model == 'B' || model == 'C')
 	{
@@ -887,8 +887,22 @@ estimateAlpha = function(estimates, supLimit = 0, div = NULL, poly = TRUE)
     }
     
     model = estimates$model
-    values = estimates$values
     n = estimates$n
+    # the input div should be for all input files
+    if (length(estimates$input) > 1)
+    {
+        allDiv = div
+        if (!is.null(allDiv) && 
+            (typeof(allDiv) != "list" || 
+             (typeof(allDiv) == "list" && length(allDiv) != length(estimates$input))))
+        {
+            stop("divergence data should be given for all input files")
+            return(NULL)
+        }    
+    } else
+    {
+        allDiv = list(div)
+    }
     
     # make sure supLimit is >= 0
     if (supLimit < 0)
@@ -898,132 +912,152 @@ estimateAlpha = function(estimates, supLimit = 0, div = NULL, poly = TRUE)
     }
     
     # I need to use the critical values for a better integration
-    quantiles = getQuantiles(estimates)
+    allQuantiles = getQuantiles(estimates)
     
-    # make sure I have p_b and S_b, they might be missing when not estimated
-    if (model != 'D')
+    # estimate alpha for all input files
+    alpha = rep(0, length(estimates$input))
+    div = NULL
+    for (j in 1:length(estimates$input))
     {
-        if (!'p_b' %in% names(values))
+        values = estimates$values[[j]] 
+        quantiles = allQuantiles[[j]]
+        
+        if (!is.null(allDiv))
         {
-            values = c(values, 0, 0)
-            names(values) = c(names(values)[1:(length(values) - 2)], 
-                              "p_b", "S_b")
-        }	
-    }
-    
-    # calculate the expected alpha from the estimated DFE
-    # it's dependent on the model
-    # for the integral giving the divergence expectations
-    if (model != 'D')
-    {
-        divDel = altIntegrate(getDivergenceExpectation,
-                              -Inf, supLimit, quantiles)
-    } else
-    {
-        # extract the S_p values
-        sp = extractSP(values)
-        posSupLim = which(sp <= supLimit)
-        if (length(posSupLim) > 1)
-        {
-            posSupLim = posSupLim[length(posSupLim)]
-        } else
-        {
-            posSupLim = length(sp)
-        }
-        # calculate the deletrious divergence
-        divDel = 0
-        for (i in 1:posSupLim)
-        {
-            divDel = (divDel 
-                      + getDivergenceExpectation(sp[i]) 
-                      * values[paste("S_p", sp[i])])
-        }
-    }
-    
-    if (is.null(div))
-    {
-        # the whole integral should be multiplied by lambda
-        # but it cancels out in the division at the end
-        # if no positive selection, return o
-        if (!hasPosSel(estimates))
-        {
-            return(0)
+            div = allDiv[[j]]    
         }
         
-        # for models B and D, I do not have an integral
-        if (model != 'B' && model != 'D')
-        {
-            divBen = altIntegrate(getDivergenceExpectation,
-                                  supLimit, Inf, quantiles) 
-        } else
-        {
-            if (model == 'B')
-            {
-                divBen = getDivergenceExpectation(values['S_b']) * values["p_b"]	
-            } else
-            {
-                divBen = 0
-                if (posSupLim < length(sp))
-                {
-                    for (i in (posSupLim + 1):length(sp))
-                    {
-                        divBen = (divBen + getDivergenceExpectation(sp[i]) 
-                                  * values[paste("S_p", sp[i])])
-                    }	
-                } else
-                {
-                    return(0)
-                }
-            }
-        }
-        
-        return(divBen / (divDel + divBen))
-    }
-    
-    # if I have divergence data,
-    # I calcualte alpha according to observed divergence counts
-    # if poly = T, I account for the misattributed polymorphism
-    # for this, I need to have theta and r_n
-    if (poly)
-    {
-        # if lambda was not estimated, I do not have r_n, so just set it to 1
-        if (!"lambda" %in% names(values))
-        {
-            r_n = 1
-        } else
-        {
-            # figure out what is my biggest r
-            pos = grep("r ", names(values), fixed = T)
-            r_n = values[pos[length(pos)]]
-        }
-        
-        # get the misattributed neutral polymorphism
-        fake_div_neut = div["length_neut"] * values["theta_bar"] * r_n / n
-        # get the misattributed selected polymorphism
+        # make sure I have p_b and S_b, they might be missing when not estimated
         if (model != 'D')
         {
-            fake_div_sel = altIntegrate(getMisattributedPolyExpectation,
-                                        -Inf, Inf, quantiles, n)
+            if (!'p_b' %in% names(values))
+            {
+                values = c(values, 0, 0)
+                names(values) = c(names(values)[1:(length(values) - 2)], 
+                                  "p_b", "S_b")
+            }	
+        }
+        
+        # calculate the expected alpha from the estimated DFE
+        # it's dependent on the model
+        # for the integral giving the divergence expectations
+        if (model != 'D')
+        {
+            divDel = altIntegrate(getDivergenceExpectation,
+                                  -Inf, supLimit, quantiles)
         } else
         {
-            fake_div_sel = 0
-            for (i in 1:length(sp))
+            # extract the S_p values
+            sp = extractSP(values)
+            posSupLim = which(sp <= supLimit)
+            if (length(posSupLim) > 1)
             {
-                fake_div_sel = (fake_div_sel 
-                                + getMisattributedPolyExpectation(sp[i], n) 
-                                * values[paste("S_p", sp[i])])
+                posSupLim = posSupLim[length(posSupLim)]
+            } else
+            {
+                posSupLim = length(sp)
+            }
+            # calculate the deletrious divergence
+            divDel = 0
+            for (i in 1:posSupLim)
+            {
+                divDel = (divDel 
+                          + getDivergenceExpectation(sp[i]) 
+                          * values[paste("S_p", sp[i])])
             }
         }
         
-        fake_div_sel = div["length_sel"] * values["theta_bar"] * r_n * fake_div_sel
+        if (is.null(div))
+        {
+            # the whole integral should be multiplied by lambda
+            # but it cancels out in the division at the end
+            # if no positive selection, return o
+            if (!hasPosSel(model, values))
+            {
+                alpha[j] = 0
+                next
+            }
+            
+            # for models B and D, I do not have an integral
+            if (model != 'B' && model != 'D')
+            {
+                divBen = altIntegrate(getDivergenceExpectation,
+                                      supLimit, Inf, quantiles) 
+            } else
+            {
+                if (model == 'B')
+                {
+                    divBen = getDivergenceExpectation(values['S_b']) * values["p_b"]	
+                } else
+                {
+                    divBen = 0
+                    if (posSupLim < length(sp))
+                    {
+                        for (i in (posSupLim + 1):length(sp))
+                        {
+                            divBen = (divBen + getDivergenceExpectation(sp[i]) 
+                                      * values[paste("S_p", sp[i])])
+                        }	
+                    } else
+                    {
+                        alpha[j] = 0
+                        next
+                    }
+                }
+            }
+            
+            alpha[j] = divBen / (divDel + divBen)
+            next
+        }
         
-        div["obs_neut"] = div["obs_neut"] - fake_div_neut
-        div["obs_sel"] = div["obs_sel"] - fake_div_sel
+        # if I have divergence data,
+        # I calcualte alpha according to observed divergence counts
+        # if poly = T, I account for the misattributed polymorphism
+        # for this, I need to have theta and r_n
+        if (poly)
+        {
+            # if lambda was not estimated, I do not have r_n, so just set it to 1
+            if (!"lambda" %in% names(values))
+            {
+                r_n = 1
+            } else
+            {
+                # figure out what is my biggest r
+                pos = grep("r ", names(values), fixed = T)
+                r_n = values[pos[length(pos)]]
+            }
+            
+            # get the misattributed neutral polymorphism
+            fake_div_neut = values["theta_bar"] * r_n / n[j]
+            # get the misattributed selected polymorphism
+            if (model != 'D')
+            {
+                fake_div_sel = altIntegrate(getMisattributedPolyExpectation,
+                                            -Inf, Inf, quantiles, n[j])
+            } else
+            {
+                fake_div_sel = 0
+                for (i in 1:length(sp))
+                {
+                    fake_div_sel = (fake_div_sel 
+                                    + getMisattributedPolyExpectation(sp[i], n[j]) 
+                                    * values[paste("S_p", sp[i])])
+                }
+            }
+            
+            fake_div_sel = values["theta_bar"] * r_n * fake_div_sel
+            
+            div["obs_neut"] = div["obs_neut"] - div["length_neut"] * fake_div_neut
+            div["obs_sel"] = div["obs_sel"] - div["length_sel"] * fake_div_sel
+        }
+        # 1 - (len_sel / len_neut) * (div_neut / div_sel) * expec_fixed_del);
+        alpha[j] = as.numeric(1 - 
+                               ((div["length_sel"] / div["length_neut"])
+                                * (div["obs_neut"] / div["obs_sel"])
+                                * divDel))
     }
-    alpha = as.numeric(1 - 
-                       ((div["length_sel"] / div["length_neut"])
-                        * (div["obs_neut"] / div["obs_sel"])
-                        * divDel))
+    
+    names(alpha) = estimates$input
     
     return(alpha)
 }
@@ -1031,6 +1065,85 @@ estimateAlpha = function(estimates, supLimit = 0, div = NULL, poly = TRUE)
 getAIC = function(estimates)
 {
 	return(2 * length(estimates$estimated) - 2 * estimates$lk)
+}
+
+areNested = function(estimated1, estimated2)
+{
+    # check if the parameters estimated in est1 are also estimated in est2
+    # or the way around
+    # (all(est1[[i]]$estimated %in% est2[[i]]$estimated)
+    #  || all(est2[[i]]$estimated %in% est1[[i]]$estimated))
+    # it is not enough to use %in% because I need to use the names as well
+    # as they indicate if the parameters where shared or not
+    
+    if (is.null(names(estimated1)))
+    {
+        names(estimated1) = rep(0, length(estimated1))
+    }
+    if (is.null(names(estimated2)))
+    {
+        names(estimated2) = rep(0, length(estimated2))
+    }
+    
+    # I could change the values in estimated by adding the names
+    aux1 = paste(names(estimated1), estimated1)
+    aux2 = paste(names(estimated2), estimated2)
+    
+    nest_1in2 = aux1 %in% aux2
+    nest_2in1 = aux2 %in% aux1
+    # the positions that are FALSE it might be because 
+    # in one the parameter was shared (name 0)
+    # and in the other it was not (name 1 or higher)
+    pos = which(!nest_1in2)
+    nest_1in2 = (all(nest_1in2) || 
+                     isTRUE(all.equal(as.numeric(names(estimated1[pos])), 
+                                      rep(0, length(pos)))))
+    pos = which(!nest_2in1)
+    nest_2in1 = (all(nest_2in1) || 
+                     isTRUE(all.equal(as.numeric(names(estimated2[pos])), 
+                                      rep(0, length(pos)))))
+    
+    return(nest_1in2 || nest_2in1)
+}
+
+fixedSame = function(estimates1, estimates2)
+{
+    # parameters that are fixed in both should be equal
+    # fixed = intersect(setdiff(names(est1[[i]]$values), est1[[i]]$estimated),
+    #                   setdiff(names(est2[[i]]$values), est2[[i]]$estimated))
+    # isTRUE(all.equal(est1[[i]]$values[fixed],
+    #                  est2[[i]]$values[fixed]))
+    if (length(estimates1$input) == 1)
+    {
+        # parameters that are fixed for file i
+        fixed1 = setdiff(names(estimates1$values[[1]]), estimates1$estimated)
+        fixed2 = setdiff(names(estimates2$values[[1]]), estimates2$estimated)
+        fixed = intersect(fixed1, fixed2)
+        if (!isTRUE(all.equal(estimates1$values[[1]][fixed],
+                              estimates2$values[[1]][fixed])))
+        {
+            return(FALSE)
+        } else
+        {
+            return(TRUE)
+        }
+    }
+    for (i in 1:length(estimates1$input))
+    {
+        # parameters that are estimated for file i
+        pos1 = which(names(estimates1$estimated) == 0 | names(estimates1$estimated) == i)
+        pos2 = which(names(estimates2$estimated) == 0 | names(estimates2$estimated) == i)
+        # parameters that are fixed for file i
+        fixed1 = setdiff(names(estimates1$values[[i]]), estimates1$estimated[pos1])
+        fixed2 = setdiff(names(estimates2$values[[i]]), estimates2$estimated[pos2])
+        fixed = intersect(fixed1, fixed2)
+        if (!isTRUE(all.equal(estimates1$values[[i]][fixed],
+                              estimates2$values[[i]][fixed])))
+        {
+            return(FALSE)
+        }
+    }
+    return(TRUE)
 }
 
 compareModels = function(est1, est2 = NULL, nested = NULL)
@@ -1101,25 +1214,24 @@ compareModels = function(est1, est2 = NULL, nested = NULL)
 		# models should be the same
 		nest = (est1[[i]]$model == est2[[i]]$model)
 		# estimated parameters are nested
-		nest = (nest 
-				  && (all(est1[[i]]$estimated %in% est2[[i]]$estimated)
-				  	   || all(est2[[i]]$estimated %in% est1[[i]]$estimated)))
+		nest = (nest && areNested(est1[[i]]$estimated, est2[[i]]$estimated))
 		# fixed parameters should be equal
-		fixed = intersect(setdiff(names(est1[[i]]$values), est1[[i]]$estimated),
-								setdiff(names(est2[[i]]$values), est2[[i]]$estimated))
-		nest = (nest && isTRUE(all.equal(est1[[i]]$values[fixed],
-													est2[[i]]$values[fixed])))
+		nest = (nest && fixedSame(est1[[i]], est2[[i]]))
 		# if models have the same number of parameters, 
 		# they can't be nested
 		nest = (nest && 
-				  	length(est1[[i]]$estimated) != length(est2[[i]]$estimated))
+		            length(est1[[i]]$estimated) != length(est2[[i]]$estimated))
 		
 		# calculate LRT
-		# skip estimates where the number of parameters is the same
-		# these cannot possibly be nested
-		if (est1[[i]]$input != est2[[i]]$input)
+		# if the lk is calculated on different input files, 
+		# than they can't be nested
+		if (!isTRUE(all.equal(est1[[i]]$input, est2[[i]]$input)))
 		{
-		    warning("Input files are different for run", i)
+		    warning(paste("Input files", 
+		                  paste(est1[[i]]$input, collapse = ", "),
+		                  "and",
+		                  paste(est2[[i]]$input, collapse = ", "),
+		            " are different for run", i))
 		    lrt = rbind(lrt, c(NA, est1[[i]]$lk, est2[[i]]$lk, NA))
 		} else if (isTRUE(nested) || (nest && is.null(nested)))
 		{
@@ -1206,8 +1318,25 @@ grouping = function(rValues, diff = NA)
 		pos = auxGroups[i]:(auxGroups[i + 1] - 1)
 		newValues = c(newValues, round(mean(rValues[pos]), digits = 5))
 	}
-	names(newValues) = paste("r", groups)
-	return(list(groups = groups, r = newValues))
+	# have to update the groups
+	# to take into consideration original grouping
+	newGroups = c()
+	for (i in 1:length(groups))
+	{
+	    # add the end of this new group
+	    org = names(rValues)[groups - 1][i]
+	    orgGroup = strsplit(org, split = " ")[[1]][2]
+	    aux = strsplit(orgGroup, split = "-")[[1]]
+	    if (length(aux) == 2)
+	    {
+	        aux = aux[2]
+	    } else
+	    {
+	        aux = aux[1]
+	    }
+	    newGroups = c(newGroups, as.numeric(aux))
+	}
+	return(list(groups = newGroups, r = newValues))
 }
 
 writeModelD = function(values, rPos, fixedInfo = NULL)
@@ -1244,7 +1373,7 @@ writeModelD = function(values, rPos, fixedInfo = NULL)
 }
 
 createInitLines = function(estimates, outputfile, startingID = 1, 
-                           fix = c("eps_cont"),
+                           fix = c("eps_cont"), share = "all",
                            groupingDiff = NA)
 {
 	# create init lines with the estimated parameters from inputfile or estimates
@@ -1270,7 +1399,7 @@ createInitLines = function(estimates, outputfile, startingID = 1,
 	        stop('Not all polyDFE runs use the same model!\n')
 	    }
 	}
-	allParams = names(allEst[[1]]$values)
+	allParams = names(allEst[[1]]$values[[1]])
 	
 	# update fix if it says "all"
 	if (fix[1] == "all")
@@ -1288,6 +1417,23 @@ createInitLines = function(estimates, outputfile, startingID = 1,
 	fix[pos] = allParams[grep('r ', allParams)[1]]
 	aux = which(unlist(lapply(allParams[1:rPos], function(x) x %in% fix)))
 	fixedInfo[aux] = rep(1, length(aux))
+	names(fixedInfo) = allParams[1:rPos]
+	
+	# set sharing info
+	if (!is.na(share[1]))
+	{
+	    # update share if it says "all"
+	    if (share[1] == "all")
+	    {
+	        share = allParams
+	    }
+        # make sure that shared parameters are not present in fix
+        share = setdiff(share, fix)    
+	    fixedInfo[share] = rep(2, length(share))    
+	}
+	
+	# make sure eps_cont is not estimated
+	fixedInfo["eps_cont"] = 1
 	
 	# before writing all the parameters
 	# write an ID line
@@ -1301,7 +1447,7 @@ createInitLines = function(estimates, outputfile, startingID = 1,
 		toWrite = paste(toWrite, 'r', '\n')	
 	} else
 	{
-		toWrite = writeModelD(allEst[[1]]$values, rPos)
+		toWrite = writeModelD(allEst[[1]]$values[[1]], rPos)
 	}
 	cat(toWrite, file = initFile, append = TRUE)
 	
@@ -1309,50 +1455,53 @@ createInitLines = function(estimates, outputfile, startingID = 1,
 	
 	for (est in allEst)
 	{
-		if (model != 'D')
-		{
-			toWrite = paste(fixedInfo[1:(rPos - 1)],
-								 sprintf('%-10g', est$values[1:(rPos - 1)]),
-								 collapse = ' ')	
-		} else
-		{
-			toWrite = writeModelD(est$values, rPos, fixedInfo)
-		}
-		
-		# calculate the grouping
-		myRValues = est$values[rPos:(length(est$values))]
-		myGroups = grouping(myRValues, groupingDiff)
-		# add the r parametesr
-		toWrite = paste(toWrite, paste(c(fixedInfo[rPos], myGroups$r),
-												 collapse = ' '))
-		# add the id
-		toWrite = paste(sprintf('%-5d', id), toWrite, '\n', sep = ' ')
-		cat(toWrite, file = initFile, append = TRUE)
-		# if I groupped anything or I have to write all groups,
-		# write to the grouping file
-		if (length(myGroups$groups) < length(myRValues))
-		{
-			if (!writeGroupHeader)
-			{
-				groupingFile = paste(outputfile, "grouping", sep = "_")
-				cat(paste("# ID no-groups   i j ... k",
-							 "# groups are: [r_1] (automated group, as r_1 = 1), ",
-							 "# [r_2, r_i], [r_i+1, r_j], ..., [r_k+1, r_{n-1}]",
-							 "# where n is the number of sampled sequences\n",
-							 sep = "\n"),
-					 file = groupingFile, append = TRUE)
-				writeGroupHeader = TRUE
-			}
-			
-			# first, ID
-			toWrite = sprintf('%-5d', id)
-			# then the number of groups
-			toWrite = paste(toWrite, sprintf('%-5d', length(myGroups$groups)))
-			# and lastly the groups
-			toWrite = paste(toWrite, paste(myGroups$groups, collapse = ' '), '\n\n')
-			cat(toWrite, file = groupingFile, append = TRUE)
-		}
-		id = id + 1
+	    for (i in 1:length(est$input))
+	    {
+	        if (model != 'D')
+	        {
+	            toWrite = paste(fixedInfo[1:(rPos - 1)],
+	                            sprintf('%-10g', est$values[[i]][1:(rPos - 1)]),
+	                            collapse = ' ')	
+	        } else
+	        {
+	            toWrite = writeModelD(est$values[[i]], rPos, fixedInfo)
+	        }
+	        
+	        # calculate the grouping
+	        myRValues = est$values[[i]][rPos:(length(est$values[[i]]))]
+	        myGroups = grouping(myRValues, groupingDiff)
+	        # add the r parameters
+	        toWrite = paste(toWrite, paste(c(fixedInfo[rPos], myGroups$r),
+	                                       collapse = ' '))
+	        # add the id
+	        toWrite = paste(sprintf('%-5d', id), toWrite, '\n', sep = ' ')
+	        cat(toWrite, file = initFile, append = TRUE)
+	        # if I groupped anything or I have to write all groups,
+	        # write to the grouping file
+	        if (length(myGroups$groups) < length(myRValues))
+	        {
+	            if (!writeGroupHeader)
+	            {
+	                groupingFile = paste(outputfile, "grouping", sep = "_")
+	                cat(paste("# ID no-groups   i j ... k",
+	                          "# groups are: [r_1] (automated group, as r_1 = 1), ",
+	                          "# [r_2, r_i], [r_i+1, r_j], ..., [r_k+1, r_{n-1}]",
+	                          "# where n is the number of sampled sequences\n",
+	                          sep = "\n"),
+	                    file = groupingFile, append = TRUE)
+	                writeGroupHeader = TRUE
+	            }
+	            
+	            # first, ID
+	            toWrite = sprintf('%-5d', id)
+	            # then the number of groups
+	            toWrite = paste(toWrite, sprintf('%-5d', length(myGroups$groups)))
+	            # and lastly the groups
+	            toWrite = paste(toWrite, paste(myGroups$groups, collapse = ' '), '\n')
+	            cat(toWrite, file = groupingFile, append = TRUE)
+	        }
+	        id = id + 1
+	    }
 	}
 	cat('\n', file = initFile, append = TRUE)
 }

@@ -1,5 +1,5 @@
 /*
- * polyDFE v1.11: predicting DFE and alpha from polymorphism data
+ * polyDFE v2.0: predicting DFE and alpha from polymorphism data
  * Copyright (c) 2018  Paula Tataru and Marco A.P. Franco
  *
  * This program is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@ int handle_status(int status, char *filename, int param)
         }
         case PARAM_NOT_FOUND:
         {
-            fprintf(stderr, "Entry %d was not found in file %s.\n", param,
+            fprintf(stderr, "Entry with ID %d was not found in file %s.\n", param,
                     filename);
             return (EXIT_FAILURE);
         }
@@ -74,15 +74,21 @@ int handle_status(int status, char *filename, int param)
             }
             else
             {
-                // found wrong range
-                // don't do anything
-                // as the ranges are updated automatically
-                int wrong = status / WRONG_RANGE;
-                int line_no = status - WRONG_RANGE * wrong;
-                fprintf(stderr,
-                        "Line %d in file %s contains %d numbers that are "
-                        "either invalid or outside permitted limits.\n",
-                        line_no, filename, wrong);
+               // found wrong range
+               // don't do anything as the ranges as updated automatically
+               int wrong = status / WRONG_RANGE;
+               int line_no = status - WRONG_RANGE * wrong;
+               fprintf(stderr,
+                       "Line %d in file %s contains ", line_no, filename);
+               if (wrong == 1)
+               {
+            	   fprintf(stderr, "1 number that is ");
+               }
+               else
+               {
+            	   fprintf(stderr, "%d numbers that are ", wrong);
+               }
+               fprintf(stderr, "either invalid or outside permitted limits.\n");
             }
             return (EXIT_FAILURE);
         }
@@ -93,24 +99,82 @@ int handle_status(int status, char *filename, int param)
 
 void print_usage(char *argv, FILE *f)
 {
-    fprintf(f, "%s v1.1\nUsage: %s -d data_file [-m model(A, B, C, D) [K]] [-t]\n\t"
-            "{-s m_neut L_neut m_sel L_sel n -i init_file ID"
-            " || \n\t[-o optim(bfgs, conj_pr, conj_fr)] [-k kind(s, j, s+j)] [-r range_file ID]"
-            "\n\t\t[-i init_file ID [-j]] [-e] [-w] [-g grouping_file ID]"
-            "\n\t\t[-p optim_file ID] [-b [basinhop_file ID]]"
-            "\n\t\t[-l min] [-v verbose(0, 1, frequency)]}\n",
+    fprintf(f, "%sv2.0\nUsage: %s -d data_file_1[:data_file_2:...:data_file_j]"
+    		"\n\t[-m model(A, B, C, D) [K]] [-i init_file ID_1[:ID_2:...:ID_j]] [-t]"
+            "\n\t{-s m_neut L_neut m_sel L_sel n ||"
+            "\n\t[-o optim(bfgs, conj_pr, conj_fr, simplex)] [-k kind(s, j, s+j)]"
+            "\n\t\t[-r range_file ID_1[:ID_2:...:ID_j]] [-i init_file ID [-j]]"
+            "\n\t\t[-e] [-w] [-g grouping_file ID_1[:ID_2:...:ID_j]] [-p optim_file ID]"
+            "\n\t\t[-b [basinhop_file ID]] [-l min] [-v verbose(0, 1, frequency)]}\n",
             argv, argv);
+}
+
+// from https://www.quora.com/How-do-you-write-a-C-program-to-split-a-string-by-a-delimiter-I-think-it-uses-ktochar
+// updated to use strtok instead of strtok_r
+char **strsplit(const char* str, const char* delim, size_t* numtokens) {
+    // copy the original string so that we don't overwrite parts of it
+    // (don't do this if you don't need to keep the old line,
+    // as this is less efficient)
+    char *s = strdup(str);
+    // these three variables are part of a very common idiom to
+    // implement a dynamically-growing array
+    size_t tokens_alloc = 1;
+    size_t tokens_used = 0;
+    char **tokens = calloc(tokens_alloc, sizeof(char*));
+    char *token;
+
+    token = strtok(s, delim);
+    while (token != NULL)
+    {
+    	// check if we need to allocate more space for tokens
+    	if (tokens_used == tokens_alloc) {
+    		tokens_alloc *= 2;
+    		tokens = realloc(tokens, tokens_alloc * sizeof(char*));
+    	}
+    	tokens[tokens_used++] = strdup(token);
+    	token = strtok(NULL, delim);
+    }
+    // cleanup
+    if (tokens_used == 0) {
+        free(tokens);
+        tokens = NULL;
+    } else {
+        tokens = realloc(tokens, tokens_used * sizeof(char*));
+    }
+    *numtokens = tokens_used;
+    free(s);
+
+    return (tokens);
+}
+
+int *strsplit_no(const char* str, const char* delim, size_t* numtokens)
+{
+    size_t i = 0;
+    char **tokens = strsplit(str, delim, numtokens);
+    int *tokens_no = malloc(sizeof(int) * *numtokens);
+
+    // need to apply atoi
+    // and free original tokens
+    for (i = 0; i < *numtokens; i++)
+    {
+        tokens_no[i] = atoi(tokens[i]);
+        free(tokens[i]);
+    }
+    free(tokens);
+
+    return (tokens_no);
 }
 
 int parse_options(int argc, char **argv, unsigned *model, unsigned int *kind,
                   unsigned *method, int *time, int *verbose, int* minutes,
                   int *initial_estimation, int *initial_values,
-                  int *div, char **data_file,
-                  char **group_file, int *group_id, char **optim_file,
-                  int *optim_id, char **range_file, int *range_id,
-                  char **init_file, int *init_id, char **basinhop_file,
-                  int *basinhop_id, char **cubature_file, int *cubature_id,
-                  double **sim)
+                  int *div, char ***data_files, size_t *no_files,
+                  char **group_file, int **group_id, size_t *no_group_id,
+				  char **optim_file, int *optim_id,
+				  char **range_file, int **range_id, size_t *no_range_id,
+                  char **init_file, int **init_id, size_t *no_init_id,
+                  char **basinhop_file, int *basinhop_id,
+                  char **cubature_file, int *cubature_id, double **sim)
 {
     char opt;
     unsigned i;
@@ -126,7 +190,8 @@ int parse_options(int argc, char **argv, unsigned *model, unsigned int *kind,
         {
             case 'd':
             {
-                (*data_file) = optarg;
+                // split multiple data files using :
+                (*data_files) = strsplit(optarg, ":", no_files);
                 req_flags[1] = 1;
                 break;
             }
@@ -198,12 +263,12 @@ int parse_options(int argc, char **argv, unsigned *model, unsigned int *kind,
                 (*init_file) = optarg;
                 if (optind < argc && *argv[optind] != '-')
                 {
-                    (*init_id) = atoi(argv[optind]);
+                    (*init_id) = strsplit_no(argv[optind], ":", no_init_id);
                     optind++;
                 }
                 else
                 {
-                    fprintf(stderr, "Option -i requires TWO arguments "
+                    fprintf(stderr, "Option -i requires at least TWO arguments "
                             "init_file ID\n\n");
                     req_flags[0] = 1;
                 }
@@ -224,11 +289,14 @@ int parse_options(int argc, char **argv, unsigned *model, unsigned int *kind,
                 {
                     *method = 3;
                 }
-                else
+                else if (strcmp(optarg, "simplex") == 0)
                 {
+                	*method = 4;
+                }
+                else {
                     fprintf(stderr, "Invalid argument '%s': -o' option "
                             "requires one of these arguments: bfgs, "
-                            "conj_pr, conj_fr \n\n",
+                            "conj_pr, conj_fr, simplex \n\n",
                             optarg);
                     req_flags[0] = 1;
                 }
@@ -241,12 +309,12 @@ int parse_options(int argc, char **argv, unsigned *model, unsigned int *kind,
                 (*range_file) = optarg;
                 if (optind < argc && *argv[optind] != '-')
                 {
-                    (*range_id) = atoi(argv[optind]);
+                    (*range_id) = strsplit_no(argv[optind], ":", no_range_id);
                     optind++;
                 }
                 else
                 {
-                    fprintf(stderr, "Option -r requires TWO arguments "
+                    fprintf(stderr, "Option -r requires at least TWO arguments "
                             "range_file ID\n\n");
                     req_flags[0] = 1;
                 }
@@ -321,12 +389,12 @@ int parse_options(int argc, char **argv, unsigned *model, unsigned int *kind,
                 (*group_file) = optarg;
                 if (optind < argc && *argv[optind] != '-')
                 {
-                    (*group_id) = atoi(argv[optind]);
+                    (*group_id) = strsplit_no(argv[optind], ":", no_group_id);
                     optind++;
                 }
                 else
                 {
-                    fprintf(stderr, "Option -g requires TWO arguments "
+                    fprintf(stderr, "Option -g requires at least TWO arguments "
                             "grouping_file ID\n\n");
                     req_flags[0] = 1;
                 }
@@ -387,7 +455,7 @@ int parse_options(int argc, char **argv, unsigned *model, unsigned int *kind,
 //        }
 //    }
 
-    // verify and generate any errors reading the arguments
+    // verify and generate any errors regarding the arguments
     for (i = 1; i < no_req_flags - 1; i++)
     {
         if (req_flags[i] == 0)
@@ -422,7 +490,7 @@ int parse_options(int argc, char **argv, unsigned *model, unsigned int *kind,
     }
 
     // verify if init file is given for discretized DFE
-    if (*model > 3 && (*init_id) == -1)
+    if (*model > 3 && (*init_id) == NULL)
     {
         fprintf(stderr,"Option -i is missing "
                 "and it is required by -m D\n\n");
@@ -430,10 +498,37 @@ int parse_options(int argc, char **argv, unsigned *model, unsigned int *kind,
     }
 
     // verify if init file is given when using -j
-    if (*initial_values == TRUE && (*init_id) == -1)
+    if (*initial_values == TRUE && (*init_id) == NULL)
     {
         fprintf(stderr, "Option -i is missing "
                 "and it is required by -j\n\n");
+        req_flags[0] = 1;
+    }
+
+    // make sure initial_values is TRUE when init is given but -e is absent
+    if ((*init_id) != NULL && *initial_estimation == FALSE)
+    {
+        *initial_values = TRUE;
+    }
+
+    // verify if number of data files matches with number of
+    // init id, range id and group id
+    if (*init_file != NULL && *no_init_id != 1 && *no_init_id != *no_files)
+    {
+        fprintf(stderr, "Number of IDs following -i has to "
+                "either be 1 or the same as number of data files \n\n");
+        req_flags[0] = 1;
+    }
+    if (*range_file != NULL && *no_range_id != 1 && *no_range_id != *no_files)
+    {
+        fprintf(stderr, "Number of IDs following -r has to "
+                "either be 1 or the same as number of data files \n\n");
+        req_flags[0] = 1;
+    }
+    if (*group_file != NULL && *no_group_id != 1 && *no_group_id != *no_files)
+    {
+        fprintf(stderr, "Number of IDs following -g has to "
+                "either be 1 or the same as number of data files \n\n");
         req_flags[0] = 1;
     }
 
@@ -443,7 +538,39 @@ int parse_options(int argc, char **argv, unsigned *model, unsigned int *kind,
         return (EXIT_FAILURE);
     }
 
-    if (*init_id == -1)
+    // reallocate init id, range id and group id if needed
+    int id = 0;
+    if (*no_init_id == 1 && *no_files > 1)
+    {
+        id = (*init_id)[0];
+        free(*init_id);
+        *init_id = malloc(sizeof(int) * (*no_files));for (i = 0; i < (*no_files); i++)
+        {
+            (*init_id)[i] = id;
+        }
+    }
+    if (*range_file != NULL && *no_range_id == 1 && *no_files > 1)
+    {
+        id = (*range_id)[0];
+        free(*range_id);
+        *range_id = malloc(sizeof(int) * (*no_files));
+        for (i = 0; i < (*no_files); i++)
+        {
+            (*range_id)[i] = id;
+        }
+    }
+    if (*group_file != NULL && *no_group_id == 1 && *no_files > 1)
+    {
+        id = (*group_id)[0];
+        free(*group_id);
+        *group_id = malloc(sizeof(int) * (*no_files));
+        for (i = 0; i < (*no_files); i++)
+        {
+            (*group_id)[i] = id;
+        }
+    }
+
+    if (*init_id == NULL)
     {
         // use automatic initial estimation
         *initial_estimation = TRUE;
@@ -491,15 +618,20 @@ void set_model(ParamsModel *pm, int model)
     }
 }
 
-int simulate(unsigned model, double *sim, char *data_file, char *init_file,
-             int init_id, char *cubature_file, int cubature_id)
+int run_simulation(unsigned model, double *sim, char **data_files, size_t no_files,
+             	   char *init_file, int *init_id, char *cubature_file, int cubature_id)
 {
     int parsed = EXIT_SUCCESS;
     int status = EXIT_SUCCESS;
     char c;
+    size_t i = 0;
 
-    fprintf(stderr, "Warning: simulating data, %s will be overwritten.\n",
-            data_file);
+    fprintf(stderr, "Warning: simulating data, ");
+    for (i = 0; i < no_files; i++)
+    {
+        fprintf(stderr, "%s ", data_files[i]);
+    }
+    fprintf(stderr, "will be overwritten.\n");
     fflush(stderr);
     printf("Do you want to continue with simulation? (Y/N): ");
     fflush(stdout);
@@ -515,161 +647,72 @@ int simulate(unsigned model, double *sim, char *data_file, char *init_file,
         return (EXIT_SUCCESS);
     }
 
-    // initialize the parameters
-    ParamsModel pm;
-    initialize_params_model(&pm);
-    set_model(&pm, model);
-    pm.n = sim[4];
-    allocate_selection_params(&pm);
-    allocate_grouping(&pm, NULL);
-
-    parsed = parse(5, init_file, init_id, &pm);
-    status += handle_status(parsed, init_file, init_id);
-
-    if (status != EXIT_SUCCESS)
+    for (i = 0; i < no_files; i++)
     {
+        // initialize the parameters
+        ParamsModel pm;
+        initialize_params_model(&pm);
+        set_model(&pm, model);
+        pm.n = sim[4];
+        allocate_selection_params(&pm);
+        allocate_grouping(&pm, NULL);
+
+        parsed = parse(5, init_file, init_id[i], &pm, FALSE);
+        status += handle_status(parsed, init_file, init_id[i]);
+
+        if (status != EXIT_SUCCESS)
+        {
+            free_params_model(&pm);
+            return (EXIT_FAILURE);
+        }
+
+        status = sim_data(&pm, sim, data_files[i]);
         free_params_model(&pm);
-        return (EXIT_FAILURE);
-    }
 
-    status = sim_data(&pm, sim, data_file);
-    free_params_model(&pm);
-
-    if (status != EXIT_SUCCESS)
-    {
-        return (EXIT_FAILURE);
+        if (status != EXIT_SUCCESS)
+        {
+            return (EXIT_FAILURE);
+        }
     }
 
     return (EXIT_SUCCESS);
 }
 
-int optimize(unsigned model, unsigned kind, unsigned method, char *data_file,
-             char *group_file, int group_id, char *optim_file, int optim_id,
-             char *range_file, int range_id, char *init_file, int init_id,
-             char *basinhop_file, int basinhop_id, char *cubature_file,
-             int cubature_id, int verbose, int minutes,  int initial_estimation,
-             int initial_values, int div)
+int run_optimization(unsigned model, unsigned kind, unsigned method,
+             	 	 char **data_files, size_t no_files,
+             	 	 char *group_file, int *group_id, char *optim_file, int optim_id,
+             	 	 char *range_file, int *range_id, char *init_file, int *init_id,
+             	 	 char *basinhop_file, int basinhop_id, char *cubature_file,
+             	 	 int cubature_id, int verbose, int minutes,
+					 int initial_estimation, int initial_values, int div)
 {
     int status = EXIT_SUCCESS;
     int parsed = EXIT_SUCCESS;
 
-    Params p;
-    initialize_params(&p);
-    set_model(p.pm, model);
-    // set divergence info
-    p.pm->div_flag = div;
-    if (p.pm->div_flag == FALSE)
-    {
-        // do not estimate lambda
-        p.pm->lambda_flag = FALSE;
-    }
-    p.kind = kind;
-    p.verbose = verbose;
+    size_t i = 0;
 
+    // parse optimization and bashin hopping parametrization
     ParamsOptim po;
     initialize_params_optim(&po);
     po.minutes = minutes;
+    po.grad_descent = TRUE;
 
     ParamsBasinHop pb;
     initialize_params_basin_hop(&pb);
-    p.pm->inital_estimation = initial_estimation;
-    p.pm->initial_values = initial_values;
 
-    // the params object is allocated in parse_data
-    parsed = parse_data(data_file, &p, &p.pm->n);
-    status += handle_status(parsed, data_file, 0);
-    if (status != EXIT_SUCCESS)
-    {
-        free_params(&p);
-        return (EXIT_FAILURE);
-    }
-    printf("---- Performing inference on %s using model ", data_file);
-    switch (model)
-    {
-        case 1:
-        {
-            printf("A\n\n");
-            break;
-        }
-        case 2:
-        {
-            printf("B\n\n");
-            break;
-        }
-        case 3:
-        {
-            printf("C\n\n");
-            break;
-        }
-        case 4:
-        {
-            printf("D\n\n");
-            break;
-        }
-    }
-
-    parsed = parse(6, group_file, group_id, p.pm);
-    status += handle_status(parsed, group_file, group_id);
-
-    if (range_file != NULL)
-    {
-        parsed = parse(0, range_file, range_id, p.pm);
-        status += handle_status(parsed, range_file, range_id);
-    }
-
-    parsed = parse(2, optim_file, optim_id, &po);
+    parsed = parse(2, optim_file, optim_id, &po, initial_values);
     status += handle_status(parsed, optim_file, optim_id);
 
-    parsed = parse(3, basinhop_file, basinhop_id, &pb);
+    parsed = parse(3, basinhop_file, basinhop_id, &pb, initial_values);
     status += handle_status(parsed, basinhop_file, basinhop_id);
-
-    initialize_selection_params(p.pm, range_file);
-    if (init_id != -1)
-    {
-        // if I don't use initial_estimation, make sure initial_values is TRUE
-        if (p.pm->inital_estimation == FALSE)
-        {
-            p.pm->initial_values = TRUE;
-        }
-        parsed = parse(1, init_file, init_id, p.pm);
-        status += handle_status(parsed, init_file, init_id);
-    }
 
     if (status != EXIT_SUCCESS)
     {
-        free_params(&p);
         return (EXIT_FAILURE);
     }
 
-    if (p.counts_neut[0].sfs[p.pm->n - 1] == -1)
-    {
-        printf("---- Data does not contain divergence counts. Using option -w.\n");
-        // make sure that div and lambda are not used
-        p.pm->div_flag = FALSE;
-        p.pm->lambda_flag = FALSE;
-    }
-
-    // check that I have at least two fragments for estimating a
-    if (p.no_neut == 1 && p.no_sel == 1 && p.pm->a != -1)
-    {
-        fprintf(stderr,
-                "---- Warning: mutation variability is not used "
-                "when only one neutral and one selected fragment is available.\n");
-        p.pm->a = -1;
-    }
-
-    if (p.pm->a == -1)
-    {
-        printf("---- No mutation variability. Using Poisson likelihood.\n\n");
-        p.pm->a_flag = FALSE;
-        p.pm->a_max = 1;
-        p.pm->a_min = -2;
-    }
-
-    allocate_params_basin_hop(&pb, p.pm);
-
     // define optimization algorithm
-    const gsl_multimin_fdfminimizer_type *type = NULL;
+    const void *type = NULL;
     gsl_set_error_handler_off();
 
     switch (method)
@@ -689,18 +732,279 @@ int optimize(unsigned model, unsigned kind, unsigned method, char *data_file,
             type = gsl_multimin_fdfminimizer_conjugate_fr;
             break;
         }
+        case 4:
+        {
+        	type = gsl_multimin_fminimizer_nmsimplex2;
+        	// I am not using a gradient descent
+        	po.grad_descent = FALSE;
+        	// update number of iterations - much larger for simplex
+        	po.max_iter = 20000;
+        	// update eps_abs - larger too
+            po.eps_abs = 0.01;
+			break;
+        }
     }
 
-    status = run_basin_hopping(&pb, type, po, &p);
-    // free memory
-    free_params(&p);
-    free_params_basin_hop(&pb);
-
-    if (status == WRONG_INIT)
+    ParamsShare ps;
+    allocate_params_share(&ps, no_files);
+    ps.data_files = data_files;
+    ps.verbose = verbose;
+    ps.initial_estimation = initial_estimation;
+    ps.initial_values = initial_values;
+    if (init_id != NULL)
     {
-        return (EXIT_FAILURE);
+        // if I don't use initial_estimation, make sure initial_values is TRUE
+        if (ps.initial_estimation == FALSE)
+        {
+            ps.initial_values = TRUE;
+        }
     }
-    return (EXIT_SUCCESS);
+    ps.kind = kind;
+
+    printf("---- Performing inference using model ");
+    switch (model)
+    {
+        case 1:
+        {
+            printf("A");
+            break;
+        }
+        case 2:
+        {
+            printf("B");
+            break;
+        }
+        case 3:
+        {
+            printf("C");
+            break;
+        }
+        case 4:
+        {
+            printf("D");
+            break;
+        }
+    }
+    printf("\n\n");
+
+    // parse data files and allocate params
+    for (i = 0; i < no_files; i++)
+    {
+        printf("---- Performing inference on %s\n", data_files[i]);
+
+        if (init_id != NULL)
+        {
+            printf("----      with -i %s %d\n", init_file, init_id[i]);
+        }
+        if (range_id != NULL)
+        {
+            printf("----      with -r %s %d\n", range_file, range_id[i]);
+        }
+
+        initialize_params(&ps.p[i]);
+        set_model(ps.p[i].pm, model);
+        // set various parameters that are already parsed
+        ps.p[i].pm->div_flag = div;
+
+        // the Params object is allocated in parse_data
+        parsed = parse_data(data_files[i], &ps.p[i], &ps.p[i].pm->n);
+        status += handle_status(parsed, data_files[i], 0);
+        if (status != EXIT_SUCCESS)
+        {
+            break;
+        }
+
+        if (ps.p[i].counts_neut[0].sfs[ps.p[i].pm->n - 1] == -1)
+        {
+            printf("---- Data %s does not contain divergence counts. "
+                   "Using option -w.\n",
+                   data_files[i]);
+            // make sure that div is not used
+            ps.p[i].pm->div_flag = FALSE;
+        }
+
+        if (group_id != NULL)
+        {
+        	parsed = parse(6, group_file, group_id[i], ps.p[i].pm, initial_values);
+        	status += handle_status(parsed, group_file, group_id[i]);
+        }
+        else
+        {
+        	// need to allocate default grouping
+        	parsed = parse(6, group_file, -1, ps.p[i].pm, initial_values);
+        	status += handle_status(parsed, group_file, -1);
+        }
+
+        if (range_file != NULL)
+        {
+            parsed = parse(0, range_file, range_id[i], ps.p[i].pm, initial_values);
+            status += handle_status(parsed, range_file, range_id[i]);
+        }
+
+        if (status != EXIT_SUCCESS)
+        {
+            break;
+        }
+
+        initialize_selection_params(ps.p[i].pm, range_file);
+
+        if (init_id != NULL)
+        {
+            parsed = parse(1, init_file, init_id[i], ps.p[i].pm, initial_values);
+            status += handle_status(parsed, init_file, init_id[i]);
+            // if failed because of wrong range and it's model D, add extra message
+            if (parsed > WRONG_RANGE && ps.p[i].pm->model == 4)
+            {
+				fprintf(stderr,
+						"Check that the given number of selection coefficients "
+						"%d matches the one in %s with ID %d\n",
+						ps.p[i].pm->no_sel / 2, init_file, init_id[i]);
+            }
+        }
+
+        // check that I have at least two fragments for estimating a
+        if (ps.p[i].no_neut == 1 && ps.p[i].no_sel == 1 && ps.p[i].pm->a != -1)
+        {
+            fprintf(stderr,
+                    "---- Warning: mutation variability is not used for %s as "
+                    "only one neutral and one selected fragment are available.\n",
+                    data_files[i]);
+            ps.p[i].pm->a = -1;
+        }
+
+        if (ps.p[i].pm->a == -1)
+        {
+            printf("---- No mutation variability. Using Poisson likelihood.\n");
+            ps.p[i].pm->a_flag = FALSE;
+            ps.p[i].pm->a_max = 1;
+            ps.p[i].pm->a_min = -2;
+        }
+
+        // check range for the b parameter
+        if (model < 4)
+        {
+        	if (ps.p[i].pm->sel_min[1] < 0.01)
+        	{
+        		fprintf(stderr,
+						"---- Warning: the range for the b parameter for file %s\n"
+						"              allows values below 0.01. When b is so "
+        				"small, the DFE is very leptokurtic\n              "
+        				"and it is very difficult to calculate the likelihood "
+						"accurately.\n", data_files[i]);
+        	}
+        }
+
+        if (status != EXIT_SUCCESS)
+        {
+            break;
+        }
+
+        printf("\n");
+    }
+
+    // start optimization
+    if (status == EXIT_SUCCESS)
+    {
+        // first, update sharing
+        set_sharing(&ps, init_file);
+
+        // if r parameters are shared, make sure the grouping is the same
+        if (ps.r_shared == TRUE)
+        {
+        	// for that, I need to make all possible comparisons
+        	// and only check the groups that "overlap"
+        	int min_r = 0;
+        	int j = 0;
+        	int k = 0;
+        	for (i = 0; i < no_files - 1; i++)
+        	{
+        		for (j = i + 1; j < no_files; j++)
+        		{
+        			min_r = ps.p[i].pm->no_r > ps.p[j].pm->no_r
+        					? ps.p[j].pm->no_r
+							: ps.p[i].pm->no_r;
+        			for (k = 0; k < min_r; k++)
+        			{
+        				if (ps.p[i].pm->inv_groups[k]
+								   != ps.p[j].pm->inv_groups[k])
+        				{
+        					status = EXIT_FAILURE;
+        					fprintf(stderr, "When the r parameters are shared and "
+        							"option -g is used, the same groups should be "
+        							"used for all files; files %s and %s have different groups",
+									data_files[i], data_files[j]);
+        					break;
+        				}
+        				if (status == EXIT_FAILURE)
+        				{
+        					break;
+        				}
+        			}
+        		}
+        	}
+        }
+
+        if (status == EXIT_SUCCESS)
+        {
+        	// make sure that if div is not used, the flag for lambda is FALSE
+        	// and that if a == -1, the flag for a is FALSE
+        	for (i = 0; i < no_files; i++)
+        	{
+        		if (ps.p[i].pm->div_flag == FALSE)
+        		{
+        			// do not estimate lambda
+        			ps.p[i].pm->lambda_flag = FALSE;
+        			ps.lambda_shared = FALSE;
+        		}
+        		if (ps.p[i].pm->a == -1)
+        		{
+        			// do not estimate a
+        			ps.p[i].pm->a_flag = FALSE;
+        			ps.a_shared = FALSE;
+        		}
+        	}
+
+        	// count how many parameters I have to estimate
+        	count_total_params(&ps);
+
+        	allocate_params_basin_hop(&pb, ps);
+        	run_basin_hopping(&pb, type, po, &ps);
+
+        	// free memory
+        	free_params_basin_hop(&pb);
+        }
+    }
+
+    // free memory
+    free_params_share(&ps);
+
+    return (status);
+}
+
+void free_memory(double *sim, size_t no_files, char **data_files,
+                 int *init_id, int *range_id, int *group_id)
+{
+    // size_t i = 0;
+
+    if (sim)
+    {
+        free(sim);
+    }
+
+    if (init_id)
+    {
+        free(init_id);
+    }
+
+    if (range_id)
+    {
+        free(range_id);
+    }
+
+    if (group_id)
+    {
+        free(group_id);
+    }
 }
 
 int main(int argc, char **argv)
@@ -709,7 +1013,9 @@ int main(int argc, char **argv)
     setvbuf(stdout, NULL, _IOLBF, 0);
     setvbuf(stderr, NULL, _IOLBF, 0);
 
-    char *data_file = NULL;
+    size_t i = 0;
+
+    char **data_files = NULL;
     char *group_file = NULL;
     char *optim_file = NULL;
     char *range_file = NULL;
@@ -717,15 +1023,20 @@ int main(int argc, char **argv)
     char *basinhop_file = NULL;
     char *cubature_file = NULL;
 
-    int group_id = -1;
+    int *group_id = NULL;
     int optim_id = -1;
-    int range_id = -1;
-    int init_id = -1;
+    int *range_id = NULL;
+    int *init_id = NULL;
     int basinhop_id = -1;
     int cubature_id = -1;
     int initial_estimation = FALSE;
     int initial_values = FALSE;
     int div = TRUE; // use divergence data
+
+    size_t no_files = 0;
+    size_t no_group_id = 0;
+    size_t no_range_id = 0;
+    size_t no_init_id = 0;
 
     double *sim = malloc(sizeof(double) * 5);
     sim[0] = -1;
@@ -743,32 +1054,21 @@ int main(int argc, char **argv)
 
     int status = parse_options(argc, argv, &model, &kind, &method, &time, &verbose,
                                &minutes, &initial_estimation, &initial_values,
-                               &div, &data_file,
-                               &group_file, &group_id, &optim_file, &optim_id,
-                               &range_file, &range_id, &init_file, &init_id,
+                               &div, &data_files, &no_files,
+                               &group_file, &group_id, &no_group_id,
+							   &optim_file, &optim_id,
+                               &range_file, &range_id, &no_range_id,
+                               &init_file, &init_id, &no_init_id,
                                &basinhop_file, &basinhop_id, &cubature_file,
                                &cubature_id, &sim);
 
     if (status != EXIT_SUCCESS)
     {
-        if (sim)
-        {
-            free(sim);
-        }
+        free_memory(sim, no_files, data_files, init_id, range_id, group_id);
 
-        if (status == EXIT_FAILURE)
-        {
-            printf("\n");
-            return (EXIT_FAILURE);
-        }
-        else
-        {
-            printf("\n");
-            return(EXIT_SUCCESS);
-        }
+        return(status);
     }
 
-    int i;
     printf("---- Running command\n---- ./polyDFE ");
     for (i = 1; i < argc; i++)
     {
@@ -788,16 +1088,17 @@ int main(int argc, char **argv)
 
     if (sim[0] != -1)
     {
-        status = simulate(model, sim, data_file, init_file, init_id,
-                          cubature_file, cubature_id);
+        status = run_simulation(model, sim, data_files, no_files, init_file,
+        		                init_id, cubature_file, cubature_id);
     }
     else
     {
-        status = optimize(model, kind, method, data_file, group_file, group_id,
-                          optim_file, optim_id, range_file, range_id, init_file,
-                          init_id, basinhop_file, basinhop_id, cubature_file,
-                          cubature_id, verbose, minutes,
-                          initial_estimation, initial_values, div);
+        status = run_optimization(model, kind, method, data_files, no_files,
+        		                  group_file, group_id, optim_file, optim_id,
+								  range_file, range_id, init_file, init_id,
+								  basinhop_file, basinhop_id, cubature_file,
+								  cubature_id, verbose, minutes,
+								  initial_estimation, initial_values, div);
     }
 
     if (time == TRUE && status != EXIT_FAILURE)
@@ -810,7 +1111,7 @@ int main(int argc, char **argv)
                seconds);
     }
 
-    free(sim);
+    free_memory(sim, no_files, data_files, init_id, range_id, group_id);
 
     return (status);
 }

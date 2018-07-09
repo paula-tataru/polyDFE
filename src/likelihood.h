@@ -1,5 +1,5 @@
 /*
- * polyDFE v1.11: predicting DFE and alpha from polymorphism data
+ * polyDFE v2.0: predicting DFE and alpha from polymorphism data
  * Copyright (c) 2018  Paula Tataru and Marco A.P. Franco
  *
  * This program is free software: you can redistribute it and/or modify
@@ -30,6 +30,7 @@
 #define WRONG_INIT 2
 #define TRUE 1
 #define FALSE 0
+#define SHARED -1
 
 struct counts_s
 {
@@ -99,14 +100,8 @@ struct params_model_s
     int sel;
     int i; // this keeps track of which sel SFS I integrate over
 
-    int neut_ln; // do I optimize neutral likelihood?
-    int sel_ln;  // do I optimize selected likelihood?
-
     gsl_integration_workspace *w;
     gsl_integration_workspace *w_div;
-
-    int inital_estimation;
-    int initial_values;
 };
 typedef struct params_model_s ParamsModel;
 
@@ -131,8 +126,47 @@ struct params_s
     double lnL;          ///< likelihood for the current set of parameters
     double lnL_neut;
     double lnL_sel;
+};
+typedef struct params_s Params;
 
-    double grad;    ///< gradient of the best solution
+struct params_share_s
+{
+    size_t no_data;
+    char ** data_files;
+    Params *p;
+
+    /* Flags for which parameters to share */
+    int r_shared;
+    int eps_an_shared;
+    int lambda_shared;
+    int theta_bar_shared;
+    int a_shared;
+    int *sel_shared;
+
+    // maximum number of groups of r between all files
+    // only necessary if the rs are shared
+    // I also need to save which file uses most r parameters
+    // as I need to use that one when I print the shared r parameters
+    int no_groups;
+    int which_r;
+
+    // Total number of parameters that need to be estimated
+    // as given by flags of each Params and the shared flags
+    int neut;
+    int sel;
+
+    // indexes indicating how to map between
+    // the parameters I estimate and the gsl_vector
+    // I need versions for only neut and only sel when I use -k
+    int *idx;
+    int *idx_neut;
+    int *idx_sel;
+
+    double lnL;          ///< likelihood for the current set of parameters
+    double lnL_neut;
+    double lnL_sel;
+
+    double criteria;    ///< gradient or size of the best solution
 
     // kind of likelihood to optimize
     // 0: neutral, selected
@@ -140,12 +174,26 @@ struct params_s
     // 2: joint
     int kind;
 
+    // do I run optimization on all files or just one of them?
+    // I need this when I do not have shared parameters
+    // so that I can split the optimization in 2
+    // when it's -1, I run on all
+    // otherwise it says on which one to run
+    int which;
+
+    int use_neut_ln; // do I optimize neutral likelihood?
+    int use_sel_ln;  // do I optimize selected likelihood?
+
+    int initial_estimation;
+    int initial_values;
+
     int verbose;
 
     unsigned int counter;
     unsigned int max_counter;
 };
-typedef struct params_s Params;
+typedef struct params_share_s ParamsShare;
+
 
 void fprintf_params_model(ParamsModel pm, FILE *f, char *s);
 void print_expec(double *e, int n);
@@ -153,14 +201,17 @@ void print_expec(double *e, int n);
 void initialize_params_model(ParamsModel *pm);
 void initialize_params(Params *p);
 void initialize_selection_params(ParamsModel *pm, char *range);
+void initialize_params_share(ParamsShare *ps);
 
 void set_to_zero(double **arr, int n);
 void allocate_selection_params(ParamsModel *pm);
 int allocate_grouping(ParamsModel *pm, double *groups);
 void allocate_params(Params *p);
+void allocate_params_share(ParamsShare *ps, size_t no_data);
 
 void free_params_model(ParamsModel *pm);
 void free_params(Params *p);
+void free_params_share(ParamsShare *ps);
 
 void copy_params_model(ParamsModel *pm, ParamsModel source);
 
@@ -168,15 +219,20 @@ void set_params_sel(ParamsModel *pm, int no_steps, int *it);
 void set_params_eps(ParamsModel *pm, int no_steps, int it);
 
 void count_params(ParamsModel *pm);
+void set_sharing(ParamsShare *ps, char *init);
+void count_total_params(ParamsShare *ps);
 
 int set_sel_expec(ParamsModel *pm, double **expec, unsigned negative_only);
 void set_neut_expec(ParamsModel pm, double **expec_neut);
 void set_anc_expec(double eps_an, int n, double **expec);
 
 void set_sel_lnL(Params *p);
-double get_sel_lnL(const gsl_vector *x, void *pv);
 void set_neut_lnL(Params *p);
-double get_neut_lnL(const gsl_vector *x, void *pv);
-double get_lnL(const gsl_vector *x, void *pv);
+
+void set_sel_lnL_share(ParamsShare *ps);
+double get_sel_lnL_share(const gsl_vector *x, void *pv);
+void set_neut_lnL_share(ParamsShare *ps);
+double get_neut_lnL_share(const gsl_vector *x, void *pv);
+double get_lnL_share(const gsl_vector *x, void *pv);
 
 #endif

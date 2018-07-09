@@ -1,4 +1,4 @@
-### polyDFE v1.11: predicting DFE and alpha from polymorphism data
+### polyDFE v2.0: predicting DFE and alpha from polymorphism data
 ### Copyright (c) 2018  Paula Tataru
 ###
 ### This program is free software: you can redistribute it and/or modify
@@ -32,22 +32,6 @@ print(names(est[[1]]))
 print(est[[1]]$estimated)
 print(est[[1]])
 
-# setting init = TRUE forces the function to return
-# the values that were estimated using starting values
-# given by the user with -i
-est_1 = parseOutput("output/example_2_init_C")
-est_2 = parseOutput("output/example_2_init_C", init = TRUE)
-cat(est_1[[1]]$lk, "\t", est_1[[1]]$grad, "\t\t", est_1[[1]]$values["S_d"], "\n",
-    est_2[[1]]$lk, "\t", est_2[[1]]$grad, "\t", est_2[[1]]$values["S_d"], "\n")
-est_1 = parseOutput("output/example_2_nonuis_sj_C")
-est_2 = parseOutput("output/example_2_nonuis_sj_C", init = TRUE)
-cat(est_1[[1]]$lk, "\t", est_1[[1]]$grad, "\t\t", est_1[[1]]$values["S_b"], "\n",
-    est_2[[1]]$lk, "\t", est_2[[1]]$grad, "\t", est_2[[1]]$values["S_b"], "\n")
-# running with init = TRUE on a run that didn't use -i / -j
-# will throw a warning and return NULL
-est = parseOutput("output/example_2_full_C", init = TRUE)
-print(est)
-
 # multiple runs of polyDFE can be stored in the same list
 # for easier processing
 est = list()
@@ -62,8 +46,11 @@ for (filename in polyDFEfiles)
 print(length(est))
 
 # what are the gradients?
-print(sapply(est, function(e) e$grad))
-# none of them are particullary large, so the optimization was most likely succesfull
+grad = sapply(est, function(e) e$criteria)
+print(grad)
+# for which files are the gradients a bit large?
+polyDFEfiles[which(grad > 0.01)]
+# for those runs it might help to run some basin hopping iterations on top
 
 # on what input files was polyDFE ran?
 print(sapply(est, function(e) e$input))
@@ -80,6 +67,7 @@ dfe = t(sapply(est, getDiscretizedDFE))
 dfe = t(sapply(est, getDiscretizedDFE, sRanges = c(-100, -10, -1, 0, 1)))
 # we can give names to the dfe matrix that partialy reflect which model was ran
 rownames(dfe) = sapply(est, getModelName)
+colnames(dfe) = toNames(c(-100, -10, -1, 0, 1))
 print(dfe)
 # the discretized DFE can also be visualized as a barplot
 barplot(dfe, beside = TRUE, legend.text = TRUE)
@@ -111,9 +99,11 @@ print(estimateAlpha(est[[8]], div = div, poly = FALSE))
 print(estimateAlpha(est[[8]], div = div, poly = FALSE, supLimit = 5))
 # calculate alpha for all runs of polyDFE found in est
 # and compare with the values returned from polyDFE
-alpha = sapply(est, function(e) c("polyDFE alpha_dfe" = unname(e$alpha["alpha_dfe"]),
+# there will be small differences 
+# because one is calculated in C and the other in R
+alpha = sapply(est, function(e) c("polyDFE alpha_dfe" = unname(unlist(e$alpha)["alpha_dfe"]),
                                   "R alpha_dfe" = estimateAlpha(e),
-                                  "polyDFE alpha_div" = unname(e$alpha["alpha_div"]),
+                                  "polyDFE alpha_div" = unname(unlist(e$alpha)["alpha_div"]),
                                   "R alpha_div" = estimateAlpha(e, div = div)))
 colnames(alpha) = basename(polyDFEfiles)
 print(alpha)
@@ -121,17 +111,17 @@ print(alpha)
 ###########################
 # model testing
 ###########################
-# this works both by comparing tow files
+# this works both by comparing two files
 print(compareModels("output/example_2_del", "output/example_2_full_C"))
 # or directly parsed estimates
 print(compareModels(est[1], est[8]))
-# it multiple runs are given, it compares run i in est1 with run i in est2
+# if multiple runs are given, it compares run i in est1 with run i in est2
 # for example, we can compare the del DFE with the full DFEs
 print(compareModels(est[c(1, 1)], est[c(2, 8)]))
 # by default, the function detects that runs 1 and 2 are not nested
 # as run 1 was a deleterious DFE obtained from model C
 # but this is, in fact, nested in model A too
-# we can then enfornce nestedness
+# we can then enforce nestedness
 print(compareModels(est[c(1, 1)], est[c(2, 8)], nested = TRUE))
 # if only est1 is given, it just returns the AIC
 aic = compareModels(est)
@@ -158,8 +148,11 @@ barplot(avg_dfe)
 # sometimes we want the best found parameters from an optimization run
 # to be used as the starting parameters for a new run
 # for that, we need to create the right init file for polyDFE
+# createInitLines is not aware of the ID's already present in the file
+# so startingID should be set carefully to make sure
+# the IDs present in the file are unique
 # eps_cont is a parameter that models contamination of neutral sites with selected sites
-# it's not identifiable - so it should never be estimated
+# it's not identifiable - so createInitLines always write its flag to be 1
 createInitLines('output/example_2_full_C', 'input/test', startingID = 1)
 # the function can be given a list of polyDFE runs
 # but they have to have the same DFE model
@@ -179,9 +172,64 @@ createInitLines(est[8], 'input/test', startingID = 21,
 # we can try a larger distance
 createInitLines(est[8], 'input/test', startingID = 22,
                 groupingDiff = 0.1)
-# when grouping r values that are already grouped, the groups obtained in
-# test_grouping are not correct, so should not be used
-# the R code doesn't know the original grouping
-# createInitLines is not aware of the ID's already present in the file
-# so startingID should be set carefully to make sure
-# the IDs present in the file are unique
+
+
+#################################################################################
+# model testing for sharing parameters
+#################################################################################
+est = c(parseOutput("output/example_1_2_indep"),
+        parseOutput("output/example_1_2_share"))
+# what are the gradients?
+grad = sapply(est, function(e) e$criteria)
+print(grad)
+# they are a bit big, running basin hopping might help
+
+# on what input files was polyDFE ran?
+print(sapply(est, function(e) e$input))
+# each entry in est has 2 inputs as polyDFE was ran on 2 files jointly
+
+# what is the discretized DFE?
+getDiscretizedDFE(est[[1]])
+getDiscretizedDFE(est[[2]])
+# just using sapply as before doesn't work anymore
+# as it doesn't return the right format
+# because getDiscretizedDFE now returns a matrix
+# containg 2 rows, one for each input file that was used
+# we can use lapply and rbind instead the result
+do.call("rbind", lapply(est, getDiscretizedDFE))
+# the last 2 rows are the same because those result form the 
+# polyDFe run where the DFE was shared by the 2 datasets
+
+# what is alpha?
+est[[1]]$alpha
+# I have, again, 2 sets of alphas, one for each input dataset
+do.call("rbind", est[[1]]$alpha)
+do.call("rbind", 
+        lapply(est, function(e) do.call("rbind", e$alpha)))
+# the last 2 rows of alpha_dfe are the same because those result form the 
+# polyDFe run where the DFE was shared by the 2 datasets
+# when calling estimateAlpha, it returns 2 estimates, 
+# one for each input dataset
+estimateAlpha(est[[1]])
+# divergence then has to be supplied as a list to estimate alpha_div
+div = lapply(est[[1]]$input, parseDivergenceData)
+estimateAlpha(est[[1]], div = div)
+# calculate alpha for all runs of polyDFE found in est
+# and compare with the values returned from polyDFE
+alpha = lapply(est, 
+               function(e) 
+                   rbind("polyDFE alpha_dfe" = do.call("rbind", e$alpha)[, "alpha_dfe"],
+                         "R alpha_dfe" = estimateAlpha(e),
+                         "polyDFE alpha_div" = do.call("rbind", e$alpha)[, "alpha_div"],
+                         "R alpha_div" = estimateAlpha(e, div = div)))
+alpha = do.call("rbind", alpha)
+print(alpha)
+
+# test if the DFE should be shared or not
+compareModels(est[1], est[2])
+# p-value says that we should use different DFEs!
+
+# when creating init lines, two line are written
+# one for each intput dataset
+createInitLines(est[1], 'input/test', startingID = 23,
+                groupingDiff = 0.1)

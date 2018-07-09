@@ -1,5 +1,5 @@
 /*
- * polyDFE v1.11: predicting DFE and alpha from polymorphism data
+ * polyDFE v2.0: predicting DFE and alpha from polymorphism data
  * Copyright (c) 2018  Paula Tataru and Marco A.P. Franco
  *
  * This program is free software: you can redistribute it and/or modify
@@ -31,6 +31,6 @@
 #include "likelihood.h"
 
 int parse_data(char *filename, Params *p, unsigned *n);
-int parse(int what, char *filename, int id, void *pv);
+int parse(int what, char *filename, int id, void *pv, int initial_values);
 
 #endif

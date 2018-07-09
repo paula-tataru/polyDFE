@@ -1,5 +1,5 @@
 /*
- * polyDFE v1.11: predicting DFE and alpha from polymorphism data
+ * polyDFE v2.0: predicting DFE and alpha from polymorphism data
  * Copyright (c) 2018  Paula Tataru
  *
  * This program is free software: you can redistribute it and/or modify
@@ -48,7 +48,7 @@ struct params_basin_hop_s
     int size;           ///< number of estimated parameters
     gsl_vector *x;      ///< optimum parameters found
     double lnL;         ///< optimum joint likelihood found
-    double grad;        ///< gradient of optimum joint likelihood found
+    double criteria;    ///< gradient or size of optimum joint likelihood found
     double best_lnL;    ///< best likelihood ever encountered
 };
 typedef struct params_basin_hop_s ParamsBasinHop;
@@ -57,10 +57,11 @@ int check_lim(double x, double m, double M);
 int check_lim_update(double *x, double *m, double *M, int flag, char *s);
 void initialize_params_basin_hop(ParamsBasinHop *pb);
 void set_default_max_iter(ParamsBasinHop *pb);
-void allocate_params_basin_hop(ParamsBasinHop *pb, ParamsModel* pm);
+void allocate_params_basin_hop(ParamsBasinHop *pb, ParamsShare ps);
 void free_params_basin_hop(ParamsBasinHop *pb);
 
 int run_basin_hopping(ParamsBasinHop *pb,
                       const gsl_multimin_fdfminimizer_type *type,
-                      ParamsOptim po, Params *p);
+                      ParamsOptim po, ParamsShare *ps);
+
 #endif
